@@ -1,4 +1,4 @@
-# Curbie
+# Curbie AI Assistant
 
 A small, self-hosted AI assistant for the home network. Curbie runs a local Qwen model through [Ollama](https://ollama.com) on an always-on Mac M1, answers **only** from the sources and skills it is given, and says plainly when it doesn't know.
 
