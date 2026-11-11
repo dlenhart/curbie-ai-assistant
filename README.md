@@ -11,6 +11,10 @@ Curbie is an experiment in building a self-contained, partly offline AI assistan
 
 > **Status:** Phase 1 (walking skeleton) is built and tested: chat over WebSocket, a calculator skill, the answer contract, and SQLite transcripts. The live go/no-go check against `qwen3:4b` and `qwen3:8b` on the M1 is the remaining step. Later phases are mapped in the [Phase 1 plan](docs/superpowers/plans/2026-10-01-curbie-phase-1-walking-skeleton.md#phase-map).
 
+### Name inspiration
+
+Curbie is named after a robot character from *Caspian Porter*, a comic book series created & written by myself. That character was inspired by V.I.N.CENT, the robot from Disney's 1979 film *The Black Hole*.
+
 ## How it works
 
 ```
