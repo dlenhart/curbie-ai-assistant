@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Curbie — Settings</title>
+  <link rel="stylesheet" href="curbie.css">
+</head>
+<body>
+  <main class="chat">
+    <header class="chat__header">CURBIE</header>
+    <nav class="nav" aria-label="Main">
+      <a class="nav__link" href="chat.html">CHAT</a>
+      <a class="nav__link" href="history.html">HISTORY</a>
+      <a class="nav__link nav__link--active" href="manage.html">MANAGE</a>
+      <a class="nav__link" href="health.html">HEALTH</a>
+      <a class="nav__link" href="inbox.html">INBOX<span class="nav__count">3</span></a>
+    </nav>
+    <div class="chat__window">
+      <div class="panel">
+        <a class="panel__back" href="manage.html">◂ MANAGE</a>
+        <h2 class="panel__heading">HOUSEHOLD</h2>
+        <div class="form-group">
+          <div class="form-row"><label class="form-row__label" for="location">Home location</label><input class="neon-input" id="location" placeholder="City or ZIP code"><span class="form-row__hint">Used for weather and "tonight" in watchers.</span></div>
+          <div class="form-row"><label class="form-row__label" for="tz">Home time zone</label><select class="neon-input neon-input--short" id="tz"><option>America/New_York</option><option>America/Chicago</option><option>America/Denver</option><option>America/Los_Angeles</option></select></div>
+          <div class="form-row"><span class="form-row__label">Morning briefing includes</span><div class="choice-row"><label><input type="checkbox" checked>Weather</label><label><input type="checkbox" checked>News headlines</label><label><input type="checkbox" checked>Calendar</label><label><input type="checkbox" checked>Reminders</label></div></div>
+        </div>
+        <h2 class="panel__heading">YOUR SETTINGS</h2>
+        <div class="form-group">
+          <div class="form-row"><label class="form-row__label" for="email">Email for alerts</label><input class="neon-input" id="email" type="email" placeholder="you@example.com"></div>
+          <div class="form-row"><span class="form-row__label">Units</span><div class="choice-row"><label><input type="radio" name="units" checked>Imperial (°F, mi)</label><label><input type="radio" name="units">Metric (°C, km)</label></div></div>
+          <div class="form-row"><span class="form-row__label">Quiet hours</span><input class="neon-input neon-input--short" type="time" value="22:00"> to <input class="neon-input neon-input--short" type="time" value="07:00"><span class="form-row__hint">Alerts go to the inbox only. Urgent alerts still email.</span></div>
+          <div class="form-row"><label class="form-row__label" for="briefing">Briefing time</label><input class="neon-input neon-input--short" id="briefing" type="time" value="07:00"></div>
+          <div class="form-row"><label class="form-row__label" for="notify">Email me alerts</label><select class="neon-input neon-input--short" id="notify"><option>When I'm not connected</option><option>Always</option><option>Urgent only</option><option>Never</option></select><span class="form-row__hint">Delivery policy is still an open question in the design.</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="form-actions"><button type="button" class="neon-button">SAVE</button></div>
+  </main>
+</body>
+</html>

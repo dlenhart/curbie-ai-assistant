@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Curbie — Inbox</title>
+  <link rel="stylesheet" href="curbie.css">
+</head>
+<body>
+  <main class="chat">
+    <header class="chat__header">CURBIE</header>
+    <nav class="nav" aria-label="Main">
+      <a class="nav__link" href="chat.html">CHAT</a>
+      <a class="nav__link" href="history.html">HISTORY</a>
+      <a class="nav__link" href="manage.html">MANAGE</a>
+      <a class="nav__link" href="health.html">HEALTH</a>
+      <a class="nav__link nav__link--active" href="inbox.html">INBOX<span class="nav__count">3</span></a>
+    </nav>
+    <div class="chat__window">
+      <div class="panel">
+        <h2 class="panel__heading">ALERTS · LAST 30 DAYS</h2>
+        <ul class="alert-list">
+          <li class="alert alert--urgent alert--unread"><div class="alert__top"><span class="alert__kind">HEALTH · URGENT</span><span class="alert__time">7:15 AM</span></div><p class="alert__text">Weather API is down. The internet is fine, so this is the provider. Weather answers will say so until it recovers.</p><div class="alert__delivery"><span class="delivery delivery--sent">WEB ✓</span><span class="delivery delivery--sent">EMAIL ✓</span></div></li>
+          <li class="alert alert--unread"><div class="alert__top"><span class="alert__kind">TIMER</span><span class="alert__time">7:58 AM</span></div><p class="alert__text">Timer done: "Brisket rest" (15 min).</p><div class="alert__delivery"><span class="delivery delivery--sent">WEB ✓</span><span class="delivery delivery--skipped">EMAIL — not needed, you were connected</span></div></li>
+          <li class="alert alert--unread"><div class="alert__top"><span class="alert__kind">BRIEFING</span><span class="alert__time">7:00 AM</span></div><p class="alert__text">Morning briefing: 5 headlines · 2 reminders today. Weather section unavailable (API down).</p><div class="alert__delivery"><span class="delivery delivery--sent">WEB ✓</span><span class="delivery delivery--failed">EMAIL ✗ SMTP timeout · retrying</span></div></li>
+          <li class="alert"><div class="alert__top"><span class="alert__kind">HEALTH</span><span class="alert__time">2:41 AM</span></div><p class="alert__text">Internet is back after 27 minutes (down 2:14–2:41 AM).</p><div class="alert__delivery"><span class="delivery delivery--sent">WEB ✓</span><span class="delivery delivery--sent">EMAIL ✓ sent 2:41 AM</span></div></li>
+          <li class="alert"><div class="alert__top"><span class="alert__kind">HEALTH</span><span class="alert__time">2:14 AM</span></div><p class="alert__text">Internet is down.</p><div class="alert__delivery"><span class="delivery delivery--sent">WEB ✓</span><span class="delivery delivery--held">EMAIL — held until internet returned, then included in the "back" alert</span></div></li>
+          <li class="alert"><div class="alert__top"><span class="alert__kind">WATCHER</span><span class="alert__time">Yesterday 9:30 PM</span></div><p class="alert__text">Freeze watch: overnight low forecast 30°F. Watcher expires 8:00 AM.</p><div class="alert__delivery"><span class="delivery delivery--sent">WEB ✓</span><span class="delivery delivery--held">EMAIL — held for quiet hours, sent 7:00 AM</span></div></li>
+          <li class="alert"><div class="alert__top"><span class="alert__kind">REMINDER</span><span class="alert__time">Yesterday 5:00 PM</span></div><p class="alert__text">Reminder: call the shop.</p><div class="alert__delivery"><span class="delivery delivery--sent">WEB ✓</span><span class="delivery delivery--sent">EMAIL ✓</span></div></li>
+        </ul>
+      </div>
+    </div>
+    <div class="inbox-actions">
+      <span>3 unread · alerts are kept for 30 days</span>
+      <button type="button" class="neon-button">MARK ALL READ</button>
+    </div>
+  </main>
+</body>
+</html>

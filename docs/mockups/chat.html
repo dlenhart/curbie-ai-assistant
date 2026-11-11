@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Curbie</title>
+  <link rel="stylesheet" href="curbie.css">
+</head>
+<body>
+  <main class="chat">
+    <header class="chat__header">CURBIE</header>
+    <nav class="nav" aria-label="Main">
+      <a class="nav__link nav__link--active" href="chat.html">CHAT</a>
+      <a class="nav__link" href="history.html">HISTORY</a>
+      <a class="nav__link" href="manage.html">MANAGE</a>
+      <a class="nav__link" href="health.html">HEALTH</a>
+      <a class="nav__link" href="inbox.html">INBOX<span class="nav__count">3</span></a>
+    </nav>
+    <div class="chat__conversation-title">▸ What's 15% of 340? · started today 7:42 AM</div>
+    <div class="chat__window">
+      <ol class="chat__log">
+        <li class="chat__entry chat__entry--user"><p class="chat__text">What's 15% of 340?</p></li>
+        <li class="chat__entry chat__entry--assistant chat__entry--cited">
+          <span class="chat__badge">Sourced</span>
+          <p class="chat__text">15% of 340 is 51.</p>
+          <ul class="chat__sources"><li>Calculator (calculator)</li></ul>
+        </li>
+        <li class="chat__entry chat__entry--user"><p class="chat__text">Who won the 1987 county bake-off?</p></li>
+        <li class="chat__entry chat__entry--assistant chat__entry--dont_know">
+          <span class="chat__badge">Don't know</span>
+          <p class="chat__text">I don't have a reliable answer for that. None of my sources cover it.</p>
+        </li>
+        <li class="chat__entry chat__entry--user"><p class="chat__text">Write a haiku about the kitchen timer.</p></li>
+        <li class="chat__entry chat__entry--assistant chat__entry--generated">
+          <span class="chat__badge">Generated</span>
+          <p class="chat__text">Fifteen minutes left
+the oven hums its countdown
+bread waits, so do I</p>
+        </li>
+        <li class="chat__entry chat__entry--user"><p class="chat__text">Thanks Curbie!</p></li>
+        <li class="chat__entry chat__entry--assistant chat__entry--conversational">
+          <p class="chat__text">Anytime.</p>
+        </li>
+        <li class="chat__entry chat__entry--user"><p class="chat__text">What's the weather tomorrow?</p></li>
+        <li class="chat__entry chat__entry--assistant chat__entry--error">
+          <span class="chat__badge">Error</span>
+          <p class="chat__text">The model isn't responding: connection to Ollama refused.</p>
+        </li>
+      </ol>
+    </div>
+    <form class="chat__form" onsubmit="return false">
+      <textarea rows="2" placeholder="Ask Curbie…" aria-label="Message"></textarea>
+      <button type="submit" class="neon-button">SEND</button>
+    </form>
+    <p class="chat__status" role="status">Curbie is processing…</p>
+  </main>
+</body>
+</html>

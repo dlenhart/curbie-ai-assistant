@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Curbie — Health</title>
+  <link rel="stylesheet" href="curbie.css">
+</head>
+<body>
+  <main class="chat">
+    <header class="chat__header">CURBIE</header>
+    <nav class="nav" aria-label="Main">
+      <a class="nav__link" href="chat.html">CHAT</a>
+      <a class="nav__link" href="history.html">HISTORY</a>
+      <a class="nav__link" href="manage.html">MANAGE</a>
+      <a class="nav__link nav__link--active" href="health.html">HEALTH</a>
+      <a class="nav__link" href="inbox.html">INBOX<span class="nav__count">3</span></a>
+    </nav>
+    <div class="chat__window">
+      <div class="panel">
+        <div class="health-summary"><strong>1 DOWN · 1 DEGRADED</strong> — the weather API isn't responding. Weather answers and the morning briefing will say so instead of guessing.</div>
+        <h2 class="panel__heading">CHECKS</h2>
+        <div class="tile-grid">
+          <div class="tile tile--ok"><span class="tile__title">INTERNET</span><span class="status">OK</span><span class="tile__detail">3 of 3 probes reachable</span><span class="tile__detail">checked 2 min ago</span></div>
+          <div class="tile tile--ok"><span class="tile__title">OLLAMA</span><span class="status">OK</span><span class="tile__detail">qwen3:8b loaded · 840 ms</span><span class="tile__detail">checked 2 min ago</span></div>
+          <div class="tile tile--down"><span class="tile__title">WEATHER API</span><span class="status">DOWN</span><span class="tile__detail">No response for 25 min · internet is fine</span><span class="tile__detail">checked 2 min ago</span></div>
+          <div class="tile tile--ok"><span class="tile__title">RSS FEEDS</span><span class="status">OK</span><span class="tile__detail">6 of 6 feeds responding</span><span class="tile__detail">checked 2 min ago</span></div>
+          <div class="tile tile--ok"><span class="tile__title">SMTP</span><span class="status">OK</span><span class="tile__detail">Last send 7:00 AM</span><span class="tile__detail">checked 2 min ago</span></div>
+          <div class="tile tile--ok"><span class="tile__title">USB DATA DRIVE</span><span class="status">OK</span><span class="tile__detail">612 GB free of 931 GB</span><span class="tile__detail">checked 2 min ago</span></div>
+          <div class="tile tile--ok"><span class="tile__title">DATABASE</span><span class="status">OK</span><span class="tile__detail">Integrity check passed</span><span class="tile__detail">checked 2 min ago</span></div>
+          <div class="tile tile--ok"><span class="tile__title">SCHEDULER</span><span class="status">OK</span><span class="tile__detail">Last tick 1 s ago</span><span class="tile__detail">checked 2 min ago</span></div>
+          <div class="tile tile--degraded"><span class="tile__title">BACKUPS</span><span class="status">DEGRADED</span><span class="tile__detail">Last backup 3 days ago</span><span class="tile__detail">checked 2 min ago</span></div>
+          <div class="tile tile--ok"><span class="tile__title">TLS CERTIFICATE</span><span class="status">OK</span><span class="tile__detail">212 days until expiry</span><span class="tile__detail">checked 2 min ago</span></div>
+        </div>
+        <h2 class="panel__heading">INCIDENTS · LAST 30 DAYS</h2>
+        <ul class="incident-log">
+          <li class="incident"><span class="incident__when">Today 6:50 AM – now</span><span class="incident__what--open">Weather API down · 25 min and counting</span></li>
+          <li class="incident"><span class="incident__when">Today 2:14–2:41 AM</span><span>Internet down · 27 min · email sent when it came back</span></li>
+          <li class="incident"><span class="incident__when">Sep 29 9:02–9:04 PM</span><span>Ollama not responding · restarted by launchd</span></li>
+          <li class="incident"><span class="incident__when">Sep 21 11:30 AM</span><span>USB drive below 70% free</span></li>
+        </ul>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

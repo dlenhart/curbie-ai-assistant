@@ -1,0 +1,42 @@
+{
+  "name": "curbie-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Curbie host service: core engine, adapters, and web UI",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "test": "jest",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@nestjs/common": "11.2.7",
+    "@nestjs/core": "11.2.7",
+    "@nestjs/platform-express": "11.2.7",
+    "@nestjs/platform-ws": "11.2.7",
+    "@nestjs/websockets": "11.2.7",
+    "ajv": "8.20.0",
+    "better-sqlite3": "12.11.1",
+    "gray-matter": "4.0.3",
+    "hbs": "4.3.1",
+    "mathjs": "15.2.0",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "11.2.7",
+    "@types/better-sqlite3": "7.6.13",
+    "@types/jest": "30.0.0",
+    "@types/node": "22.20.5",
+    "@types/supertest": "7.2.1",
+    "@types/ws": "8.18.2",
+    "jest": "30.5.2",
+    "supertest": "7.3.0",
+    "ts-jest": "29.4.14",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "types": ["node"] },
+  "exclude": ["src/**/*.spec.ts", "src/core/testing/**", "src/interfaces/server-message.interface.ts"]
+}

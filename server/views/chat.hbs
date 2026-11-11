@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Curbie</title>
+  <link rel="stylesheet" href="/static/chat.css">
+</head>
+<body>
+  <main class="chat" data-conversation-id="{{conversationId}}">
+    <header class="chat__header">CURBIE</header>
+    <div class="chat__window">
+      <ol class="chat__log" id="chat-log" aria-live="polite"></ol>
+    </div>
+    <form class="chat__form" id="chat-form">
+      <textarea id="chat-input" rows="2" maxlength="4000" placeholder="Ask Curbie…" aria-label="Message" required></textarea>
+      <button type="submit" id="chat-send" class="neon-button">SEND</button>
+    </form>
+    <p class="chat__status" id="chat-status" role="status"></p>
+  </main>
+  <script src="/static/chat.js"></script>
+</body>
+</html>
