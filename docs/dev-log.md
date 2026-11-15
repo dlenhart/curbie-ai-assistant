@@ -363,21 +363,32 @@ The last exchange was "What will the UI look like?" Claude showed the planned st
     Finalize took about 8 s in the browser against about 5 s in the scripted runs. Conversation history makes the prompt longer, a preview of what retrieval will cost.
 13. **"Make me a script so I don't forget."** The owner asked for the `launchctl` command in a script. `scripts/ollama-service.sh` handles `start`, `stop` (before ejecting the drive), `restart`, and `status`. It refuses to start without the drive and copes with being run twice. The installer gained a model-storage check, and it now offers this service instead of `brew services`, which would have quietly put models on the internal disk.
 
+14. **Audit triage.** The owner chose to finish the `npm audit` work before stopping, and to leave Phase 2 for the next session.
+    - Every critical and high finding was fixable within the pinned major versions:
+      - handlebars, via `hbs` 4.3.1 → 4.4.0;
+      - multer, via NestJS 11.2.7 → 11.2.10 (all six `@nestjs/*` packages kept in step);
+      - body-parser, qs, and fast-uri, via in-range lockfile updates.
+    - The result: 27 findings → 21, with none critical or high, and only one left in production code.
+    - That one is `hbs`, which has an unpatched 2021 advisory and is flagged in every version. Claude read the advisory before accepting it: the issue needs request data to reach `render()`'s locals, and Curbie's only render passes a server-generated conversation ID. The design now records the rule that keeps it safe.
+    - The other 20 are the Jest toolchain, which is dev-only. The audit's "fix" for them is a downgrade to Jest 25.
+    - Verified with the full test suite, the typecheck and build, and a fresh server on a spare port serving the chat page and its static files.
+
 ### Decided
 - **Default model: `qwen3:4b-instruct`** (design §4.5). Thinking models kept the contract but were too slow; the non-thinking 4B kept it at a usable speed.
 - **Bounded context and output on every call:** 8,192 and 512 tokens (design §4.5). Without them, a runaway generation silently cut the contract out of the prompt.
 - **The go/no-go gate is passed.** Phase 1 is done.
+- **Audit:** NestJS 11.2.10 and `hbs` 4.4.0. The `hbs` advisory is accepted under a rule: render locals come only from server-side values. The Jest-chain findings are accepted as dev-only (design §5.7).
 - **Models live on the project drive, beside the data dir,** under Curbie's own LaunchAgent (design §6b, `installation.md` §1.3a).
 
 ### Produced
 - `server/`: the new default model and the `num_ctx`/`num_predict` options, with their specs updated first. 152 tests in 20 suites.
+- `server/package.json` and the lockfile: NestJS 11.2.10, `hbs` 4.4.0, and patched transitive dependencies.
 - `scripts/ollama-service.sh`, plus a model-storage check in `scripts/install.sh`.
 - `diagnostics/model-contract.diagnostic.js`: the diagnostic from this session, kept as the seed of Phase 8's eval harness. It runs the real orchestrator and Ollama adapter and logs every call's timing, tokens, and thinking output.
 - `~/Library/LaunchAgents/com.curbie.ollama.plist` on the M1 (outside the repo; documented in `installation.md` §1.3a).
 - Docs: design §4.5, §6b, §7.1, §8; `installation.md`; `README.md`; the Phase 1 plan's Step 7 marked done.
 
 ### Still open
-- `npm audit` triage (handlebars critical; body-parser and multer high) before Phase 2 opens Curbie to the LAN.
 - Phase 2 decisions: HTTPS or plain HTTP, IP address or `curbie.local`, which settings to build now.
 - Move the drive to a direct USB-C port with a 10 Gb/s cable.
 - The config parser keeps its defaults inline, against the single-constants-file rule.
@@ -390,3 +401,4 @@ The last exchange was "What will the UI look like?" Claude showed the planned st
 - **The harness earned its keep on day one.** A real hallucination (the Phillies) was produced and then blocked by code, not by the prompt.
 - **Pick the model for the job, not the size.** The planned 4B-vs-8B question turned into thinking vs. non-thinking, and that difference was worth a 5–7× speedup.
 - **Hardware fails quietly too.** A cable or hub can turn a fast SSD into a USB 2 device, and nothing reports it until a 2.5 GB file takes 1.5 minutes to read.
+- **Read the advisory before accepting the risk.** "Critical, no fix available" sounded alarming. Reading the advisory turned it into a precise condition (request data reaching `render()`) and a one-line rule that keeps Curbie clear of it.

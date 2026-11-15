@@ -8,7 +8,7 @@ Phase 1 (walking skeleton) is done: all 12 plan tasks, 152 tests in 20 suites, c
 
 **The M1 is set up.** Ollama runs under Curbie's own LaunchAgent, with its models on the `CURBIE_BRAIN` USB drive (`installation.md` §1.3a). Use `scripts/ollama-service.sh start|stop|status`, and stop Ollama before ejecting the drive. The data dir is `/Volumes/CURBIE_BRAIN/curbie`.
 
-**Next session:** follow `docs/next-session.md`. In short: `npm audit` triage, then the Phase 2 decisions, then the Phase 2 plan.
+**Next session:** follow `docs/next-session.md`. In short: the Phase 2 decisions, then the Phase 2 plan. The `npm audit` triage is done (design §5.7). The `hbs` advisory is accepted on one condition: render locals come only from server-side values, never from request data.
 
 **Phase 2 (planning, no plan or code yet):** decided: **no users and no authentication, ever.** Curbie is an open chat for anyone on the home network (design §4.7, §5.3). Settings are household-only (§4.17). Still to decide: HTTPS via mkcert or plain HTTP on the LAN (trade-offs in §5.3), how devices reach Curbie (IP address or a name like `curbie.local`), and which settings to build now. Then write the Phase 2 plan in `docs/superpowers/plans/`.
 

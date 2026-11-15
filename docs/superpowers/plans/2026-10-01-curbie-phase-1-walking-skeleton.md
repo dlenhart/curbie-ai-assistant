@@ -34,7 +34,7 @@ The design covers several independent subsystems, so it's delivered as one plan 
 
 These resolve open questions or pin details the design left to implementation:
 
-- **NestJS pinned to 11.2.7.** NestJS 12 is ESM-only, which breaks the Jest + ts-jest toolchain. Upgrading is a later, separate task.
+- **NestJS pinned to 11.2.7** (moved to 11.2.10 on 2026-11-15 for a multer security fix; design §5.7). NestJS 12 is ESM-only, which breaks the Jest + ts-jest toolchain. Upgrading is a later, separate task.
 - **TypeScript 5.9.3.** ts-jest 29 requires TypeScript < 7.
 - **Migration tool: a small in-house migrator.** Migrations are versioned TypeScript constants (`server/src/adapters/persistence/migrations.ts`), applied in order, each in a transaction, recorded in `schema_migrations`. Forward-only, with no third-party dependency. This resolves the design's "migration tool" open question.
 - **Data-dir marker file.** The data dir must contain `.curbie-data-dir`. An unmounted USB drive (or an empty stand-in folder) therefore fails startup loudly instead of silently creating a new empty database (design §6b).

@@ -555,6 +555,11 @@ RSS items, web results, documents, OCR output, and Wikipedia passages may contai
 
 **Supply chain:**
 - Committed lockfile. `npm audit` runs as part of deployment.
+- **Never `npm audit fix --force`.** It proposes jumps across major versions, including NestJS 12, which is ESM-only and breaks Jest + ts-jest. Fixes stay within the pinned major versions, with exact pins.
+- **Audit triage, 2026-11-15:** from 27 findings (2 critical, 3 high) to 21 (none critical or high). `npm audit --omit=dev` leaves one. Fixed: handlebars 4.7.10 (via `hbs` 4.4.0), multer 2.5.0 (via NestJS 11.2.10), body-parser 2.4.0, qs 6.17.1, and fast-uri 3.1.9.
+- **Accepted risks** (re-check at every audit):
+  - **`hbs` (GHSA-7f5c-rpf4-86p8, moderate, no patch exists).** `hbs` mixes template data with engine options in Express's `render()`, so request data passed as render locals can overwrite engine options and disclose files. **Rule: render locals are built from server-side values only, never from `req.query`, `req.body`, params, or spread request data.** Today the only render is the chat page's `{ conversationId }`, which the server generates. If a later phase needs request data in a template, copy whitelisted fields explicitly, or replace `hbs`.
+  - **The Jest toolchain** (glob, minimatch, deepmerge, babel-plugin-istanbul, and their parents, moderate and low). These are dev-only: never shipped, never run by the server, never given network input. The audit's suggested fix is a downgrade to Jest 25, so these wait for a normal Jest or ts-jest release.
 
 ## 6. Local Wikipedia and offline knowledge
 
