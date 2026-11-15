@@ -45,10 +45,18 @@ describe('parseConfig', () => {
     expect(config.maxToolRounds).toBe(2);
   });
 
-  it('refuses non-loopback hosts until auth and TLS exist', () => {
-    expect(() => parseConfig({ CURBIE_DATA_DIR: '/data', CURBIE_HTTP_HOST: '0.0.0.0' }, DEFAULTS)).toThrow(
-      /not a loopback address/,
+  it.each(['0.0.0.0', '192.168.1.20', '::', '::1', 'localhost', '127.0.0.1'])('accepts %s as the HTTP host', (host) => {
+    expect(parseConfig({ CURBIE_DATA_DIR: '/data', CURBIE_HTTP_HOST: host }, DEFAULTS).httpHost).toBe(host);
+  });
+
+  it.each(['curbie.local', 'example.com', '192.168.1', 'http://0.0.0.0'])('rejects %s as the HTTP host', (host) => {
+    expect(() => parseConfig({ CURBIE_DATA_DIR: '/data', CURBIE_HTTP_HOST: host }, DEFAULTS)).toThrow(
+      /CURBIE_HTTP_HOST must be an IP address \(such as 0\.0\.0\.0 for the home network\) or localhost/,
     );
+  });
+
+  it('still defaults to loopback so LAN access is opt-in', () => {
+    expect(parseConfig({ CURBIE_DATA_DIR: '/data' }, DEFAULTS).httpHost).toBe('127.0.0.1');
   });
 
   it.each([['abc'], ['0'], ['70000'], ['-1'], ['3.5']])('rejects invalid port %s', (port) => {

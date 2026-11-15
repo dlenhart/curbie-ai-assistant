@@ -112,14 +112,14 @@ How it behaves:
 - **Curbie pins its model in memory** (`keep_alive: -1`), so only the first question after Ollama starts waits on reading the model from the drive.
 - **Moving existing models:** stop Ollama, `mv ~/.ollama/models/* /Volumes/CURBIE_BRAIN/ollama-models/`, start it, and confirm with `ollama list`.
 
-### 1.4 Configuration (environment variables, Phase 1)
+### 1.4 Configuration (environment variables)
 
 | Variable | Required | Default | Notes |
 |---|---|---|---|
 | `CURBIE_DATA_DIR` | Yes | — | Absolute path to the data dir on the USB drive. |
-| `CURBIE_MODEL` | No | `qwen3:4b-instruct` | Ollama model tag. |
+| `CURBIE_MODEL` | No | `qwen3:4b-instruct` | Ollama model tag. Since Phase 2 this is only the default: a model chosen on the Settings page (Manage → Settings) overrides it. |
 | `OLLAMA_BASE_URL` | No | `http://127.0.0.1:11434` | |
-| `CURBIE_HTTP_HOST` | No | `127.0.0.1` | Loopback only in Phase 1. Phase 2 allows a LAN address (no auth, by decision; design §5.3). |
+| `CURBIE_HTTP_HOST` | No | `127.0.0.1` | An IP address or `localhost`. Set `0.0.0.0` to serve the home network (§1.5a). No auth, by decision (design §5.3). |
 | `CURBIE_HTTP_PORT` | No | `3000` | |
 | `CURBIE_SKILLS_DIR` | No | repo `skills/` | |
 | `CURBIE_HISTORY_MESSAGE_LIMIT` | No | `10` | 0–100. |
@@ -135,6 +135,18 @@ CURBIE_DATA_DIR=/Volumes/<usb-drive>/curbie npm start
 ```
 
 Then open `http://127.0.0.1:3000`. The live verification checklist is in the Phase 1 plan, Task 12 Step 7. Running under launchd (start at boot, wait for the USB drive, restart on crash) comes in a later phase.
+
+### 1.5a Reaching Curbie from other devices (Phase 2)
+
+Curbie is served over plain HTTP and reached by IP address (design §5.3).
+
+1. Start it on all interfaces: `CURBIE_HTTP_HOST=0.0.0.0 CURBIE_DATA_DIR=/Volumes/CURBIE_BRAIN/curbie npm start`. The log prints an `On your home network: http://<ip>:3000` line for each network address.
+2. The IP can also be found under System Settings → Wi-Fi → Details, or with `ipconfig getifaddr en0`.
+3. Reserve that IP for the M1 in the router's DHCP settings, or the address will eventually change and bookmarks will break.
+4. The first time, macOS may ask whether `node` may accept incoming connections. Allow it.
+5. On a phone or laptop on the same network, open `http://<ip>:3000`.
+
+Open the page by IP, `localhost`, or `127.0.0.1`. Curbie refuses requests addressed to a hostname (a DNS rebinding defense), and refuses form posts and chat connections from other sites' pages (design §5.3).
 
 ### 1.6 Accounts and API keys (later phases)
 
@@ -156,7 +168,7 @@ Docker, Redis, Python on the M1 (unless a Python sidecar is ever needed, §3), a
 
 ## 3. Clients
 
-- **Phone and laptops:** a modern browser, plus the mkcert root CA installed once HTTPS lands.
+- **Phone and laptops:** a modern browser on the home network. If HTTPS lands later, the mkcert root CA too.
 - **Raspberry Pi (later):** Raspberry Pi OS with a browser and the mkcert root CA. The voice phase adds Python 3 with openWakeWord, whisper.cpp, and Piper.
 
 ## 4. Offline knowledge sources

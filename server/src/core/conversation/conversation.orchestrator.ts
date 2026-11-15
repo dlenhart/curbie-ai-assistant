@@ -11,7 +11,8 @@ import type { AssistantReply } from './interfaces/assistant-reply.interface';
 import type { ConversationOrchestratorDependencies } from './interfaces/conversation-orchestrator-dependencies.interface';
 import type { StoredMessage } from './interfaces/stored-message.interface';
 import type { UserMessageInput } from './interfaces/user-message-input.interface';
-import { buildFinalizeInstruction, buildRejectionNotice } from './system-prompt.builder';
+import type { HouseholdSettings } from '../settings/interfaces/household-settings.interface';
+import { buildFinalizeInstruction, buildHouseholdPreferences, buildRejectionNotice } from './system-prompt.builder';
 import { formatToolOutcome } from './tool-outcome.formatter';
 import type { ReplyCategory } from './types/reply-category.type';
 import type { StoredMessageRole } from './types/stored-message-role.type';
@@ -24,18 +25,19 @@ export class ConversationOrchestrator {
     if (text === '') throw new EmptyMessageError();
 
     const { transcripts, historyMessageLimit, systemPrompt, maxToolRounds } = this.dependencies;
+    const settings = this.dependencies.settings.current();
     transcripts.ensureConversation(input.conversationId, input.userId, this.timestamp());
     const history = transcripts.recentMessages(input.conversationId, historyMessageLimit);
     this.recordMessage(input.conversationId, 'user', text, null, []);
 
     const messages: ChatMessage[] = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: `${systemPrompt}\n\n${buildHouseholdPreferences(settings)}` },
       ...history.map(toChatMessage),
       { role: 'user', content: text },
     ];
     const sourcesById = new Map<string, SourceRecord>();
 
-    const hasFinishedGathering = await this.gatherWithTools(messages, sourcesById);
+    const hasFinishedGathering = await this.gatherWithTools(settings, messages, sourcesById);
     if (!hasFinishedGathering) {
       return this.reply(
         input.conversationId,
@@ -46,15 +48,19 @@ export class ConversationOrchestrator {
       );
     }
 
-    const answer = await this.produceVerifiedAnswer(messages, sourcesById);
+    const answer = await this.produceVerifiedAnswer(settings, messages, sourcesById);
     return this.reply(input.conversationId, answer.category, answer.text, answer.sourceIds, sourcesById);
   }
 
-  private async gatherWithTools(messages: ChatMessage[], sourcesById: Map<string, SourceRecord>): Promise<boolean> {
+  private async gatherWithTools(
+    settings: HouseholdSettings,
+    messages: ChatMessage[],
+    sourcesById: Map<string, SourceRecord>,
+  ): Promise<boolean> {
     const { model, toolRegistry, maxToolRounds } = this.dependencies;
     const tools = toolRegistry.toolDefinitions();
     for (let round = 0; round < maxToolRounds; round++) {
-      const response = await model.chat({ messages, tools });
+      const response = await model.chat({ modelName: settings.modelName, messages, tools });
       if (response.toolCalls.length === 0) return true;
 
       messages.push({ role: 'assistant', content: response.content, toolCalls: response.toolCalls });
@@ -68,6 +74,7 @@ export class ConversationOrchestrator {
   }
 
   private async produceVerifiedAnswer(
+    settings: HouseholdSettings,
     messages: readonly ChatMessage[],
     sourcesById: ReadonlyMap<string, SourceRecord>,
   ): Promise<StructuredAnswer> {
@@ -78,6 +85,7 @@ export class ConversationOrchestrator {
 
     for (let attempt = 1; attempt <= MAX_FINALIZE_ATTEMPTS; attempt++) {
       const response = await this.dependencies.model.chat({
+        modelName: settings.modelName,
         messages: finalizeMessages,
         tools: [],
         responseSchema: STRUCTURED_ANSWER_SCHEMA,

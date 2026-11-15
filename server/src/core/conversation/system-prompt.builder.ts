@@ -1,4 +1,5 @@
-import { HONESTY_RULES } from '../../constants';
+import { HONESTY_RULES, UNIT_DESCRIPTIONS } from '../../constants';
+import type { HouseholdSettings } from '../settings/interfaces/household-settings.interface';
 import type { SkillDefinition } from '../skills/interfaces/skill-definition.interface';
 
 export function buildSystemPrompt(skills: readonly SkillDefinition[]): string {
@@ -10,6 +11,13 @@ export function buildSystemPrompt(skills: readonly SkillDefinition[]): string {
     }
   }
   return lines.join('\n');
+}
+
+export function buildHouseholdPreferences(settings: HouseholdSettings): string {
+  return [
+    'Household preferences:',
+    `- Units: ${UNIT_DESCRIPTIONS[settings.units]}. Use these when the user doesn't name a unit.`,
+  ].join('\n');
 }
 
 export function buildFinalizeInstruction(availableSourceIds: readonly string[]): string {

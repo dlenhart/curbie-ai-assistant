@@ -24,7 +24,7 @@ export class OllamaModelAdapter implements ModelPort {
     }
 
     const body = {
-      model: this.options.modelName,
+      model: request.modelName,
       stream: false,
       keep_alive: -1,
       options: { num_ctx: OLLAMA_CONTEXT_WINDOW_TOKENS, num_predict: OLLAMA_MAX_OUTPUT_TOKENS },

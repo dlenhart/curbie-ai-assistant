@@ -1,0 +1,37 @@
+<form class="settings-form" method="post" action="/manage/settings">
+  <div class="chat__window">
+    <div class="panel">
+      <a class="panel__back" href="/manage">◂ MANAGE</a>
+      <h2 class="panel__heading">HOUSEHOLD</h2>
+      <div class="form-group">
+        <div class="form-row">
+          <label class="form-row__label" for="model">Model</label>
+          <select class="neon-input neon-input--short" id="model" name="modelName">
+            {{#each modelOptions}}<option value="{{value}}"{{#if isSelected}} selected{{/if}}>{{label}}</option>{{/each}}
+          </select>
+          <span class="form-row__hint">Changes apply to the next message.</span>
+          {{#if isModelListUnavailable}}<span class="form-row__hint">Couldn't reach Ollama, so only the current model is listed.</span>{{/if}}
+          {{#if fieldErrors.modelName}}<span class="form-row__hint form-row__error">{{fieldErrors.modelName}}</span>{{/if}}
+        </div>
+        <div class="form-row">
+          <label class="form-row__label" for="time-zone">Home time zone</label>
+          <select class="neon-input neon-input--short" id="time-zone" name="timeZone">
+            {{#each timeZoneOptions}}<option value="{{value}}"{{#if isSelected}} selected{{/if}}>{{label}}</option>{{/each}}
+          </select>
+          {{#if fieldErrors.timeZone}}<span class="form-row__hint form-row__error">{{fieldErrors.timeZone}}</span>{{/if}}
+        </div>
+        <div class="form-row">
+          <span class="form-row__label">Units</span>
+          <div class="choice-row">
+            {{#each unitOptions}}<label><input type="radio" name="units" value="{{value}}"{{#if isSelected}} checked{{/if}}>{{label}}</label>{{/each}}
+          </div>
+          {{#if fieldErrors.units}}<span class="form-row__hint form-row__error">{{fieldErrors.units}}</span>{{/if}}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="form-actions">
+    {{#if isSaved}}<p class="chat__status" role="status">Settings saved.</p>{{/if}}
+    <button type="submit" class="neon-button">SAVE</button>
+  </div>
+</form>

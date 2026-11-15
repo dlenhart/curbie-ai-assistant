@@ -7,9 +7,15 @@ import { ToolRegistry } from '../skills/tool.registry';
 import { FixedClock } from '../testing/fixed.clock';
 import { InMemoryTranscriptRepository } from '../testing/in-memory-transcript.repository';
 import { answerResponse, ScriptedModel, textResponse, toolCallResponse } from '../testing/scripted.model';
+import { FixedSettingsReader } from '../testing/fixed-settings.reader';
 import { SequentialIdGenerator } from '../testing/sequential-id.generator';
+import type { HouseholdSettings } from '../settings/interfaces/household-settings.interface';
 import { ConversationOrchestrator } from './conversation.orchestrator';
 import { EmptyMessageError } from './errors/empty-message.error';
+import { buildHouseholdPreferences } from './system-prompt.builder';
+
+const SETTINGS: HouseholdSettings = { modelName: 'qwen3:8b', timeZone: 'America/New_York', units: 'metric' };
+const SYSTEM_MESSAGE = `SYSTEM PROMPT\n\n${buildHouseholdPreferences(SETTINGS)}`;
 
 const adderSkill: SkillDefinition = {
   name: 'adder',
@@ -39,7 +45,10 @@ class AdderAdapter implements SkillAdapter {
   }
 }
 
-function createOrchestrator(model: ScriptedModel, overrides: { maxToolRounds?: number; historyMessageLimit?: number } = {}) {
+function createOrchestrator(
+  model: ScriptedModel,
+  overrides: { maxToolRounds?: number; historyMessageLimit?: number; settings?: FixedSettingsReader } = {},
+) {
   const idGenerator = new SequentialIdGenerator();
   const toolRegistry = new ToolRegistry(idGenerator);
   toolRegistry.register(adderSkill, new AdderAdapter());
@@ -51,6 +60,7 @@ function createOrchestrator(model: ScriptedModel, overrides: { maxToolRounds?: n
     clock: new FixedClock(new Date('2026-10-01T12:00:00.000Z')),
     idGenerator,
     systemPrompt: 'SYSTEM PROMPT',
+    settings: overrides.settings ?? new FixedSettingsReader(SETTINGS),
     historyMessageLimit: overrides.historyMessageLimit ?? 10,
     maxToolRounds: overrides.maxToolRounds ?? 4,
   });
@@ -97,7 +107,7 @@ describe('ConversationOrchestrator', () => {
     const [gatherRequest, finalizeRequest] = model.receivedRequests;
     expect(gatherRequest.tools.map((tool) => tool.name)).toEqual(['add_numbers']);
     expect(gatherRequest.responseSchema).toBeUndefined();
-    expect(gatherRequest.messages[0]).toEqual({ role: 'system', content: 'SYSTEM PROMPT' });
+    expect(gatherRequest.messages[0]).toEqual({ role: 'system', content: SYSTEM_MESSAGE });
     expect(finalizeRequest.tools).toEqual([]);
     expect(finalizeRequest.responseSchema).toBeDefined();
     expect(finalizeRequest.messages.at(-1)?.content).toContain('Source IDs available this turn: none');
@@ -208,7 +218,7 @@ describe('ConversationOrchestrator', () => {
 
     const secondGather = model.receivedRequests[2];
     expect(secondGather.messages).toEqual([
-      { role: 'system', content: 'SYSTEM PROMPT' },
+      { role: 'system', content: SYSTEM_MESSAGE },
       { role: 'user', content: 'hello' },
       { role: 'assistant', content: 'Hi there.', toolCalls: [] },
       { role: 'user', content: 'you there?' },
@@ -240,4 +250,53 @@ describe('ConversationOrchestrator', () => {
     const { orchestrator } = createOrchestrator(model);
     await expect(orchestrator.handleUserMessage(input)).rejects.toThrow(ModelUnavailableError);
   });
+
+  it("sends the settings' model name on every model call in the turn", async () => {
+    const model = new ScriptedModel([
+      toolCallResponse('add_numbers', { a: 2, b: 3 }),
+      textResponse(''),
+      answerResponse({ category: 'cited', text: '2 + 3 is 5.', sourceIds: ['src_1'], quotes: [] }),
+    ]);
+    await createOrchestrator(model).orchestrator.handleUserMessage(input);
+    expect(model.receivedRequests.map((request) => request.modelName)).toEqual(['qwen3:8b', 'qwen3:8b', 'qwen3:8b']);
+  });
+
+  it('puts the units preference in the system message', async () => {
+    const model = new ScriptedModel([textResponse(''), answerResponse(conversationalAnswer)]);
+    await createOrchestrator(model).orchestrator.handleUserMessage(input);
+    expect(model.receivedRequests[0].messages[0].content.endsWith(buildHouseholdPreferences(SETTINGS))).toBe(true);
+  });
+
+  it('reads the settings once per turn', async () => {
+    const settings = new FixedSettingsReader(SETTINGS);
+    const model = new ScriptedModel([
+      toolCallResponse('add_numbers', { a: 2, b: 3 }),
+      textResponse(''),
+      answerResponse({ category: 'cited', text: '2 + 3 is 5.', sourceIds: ['src_1'], quotes: [] }),
+    ]);
+    await createOrchestrator(model, { settings }).orchestrator.handleUserMessage(input);
+    expect(settings.readCount).toBe(1);
+  });
+
+  it('uses new settings on the next turn', async () => {
+    const settings = new FixedSettingsReader(SETTINGS);
+    const model = new ScriptedModel([
+      textResponse(''),
+      answerResponse(conversationalAnswer),
+      textResponse(''),
+      answerResponse(conversationalAnswer),
+    ]);
+    const { orchestrator } = createOrchestrator(model, { settings });
+    await orchestrator.handleUserMessage(input);
+    settings.replace({ ...SETTINGS, modelName: 'qwen3:4b-instruct' });
+    await orchestrator.handleUserMessage(input);
+    expect(model.receivedRequests.map((request) => request.modelName)).toEqual([
+      'qwen3:8b',
+      'qwen3:8b',
+      'qwen3:4b-instruct',
+      'qwen3:4b-instruct',
+    ]);
+  });
 });
+
+const conversationalAnswer = { category: 'conversational', text: 'Hi.', sourceIds: [], quotes: [] };

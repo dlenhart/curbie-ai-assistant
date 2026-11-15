@@ -25,9 +25,10 @@ const CALCULATOR_TOOL = {
 describe('OllamaModelAdapter', () => {
   it('sends messages and tools in Ollama format, keeps the model loaded, and bounds context and output', async () => {
     const { fetchFunction, captured } = fakeFetch({ message: { role: 'assistant', content: 'hello' } });
-    const adapter = new OllamaModelAdapter({ baseUrl: 'http://127.0.0.1:11434', modelName: 'qwen3:4b', fetchFunction });
+    const adapter = new OllamaModelAdapter({ baseUrl: 'http://127.0.0.1:11434', fetchFunction });
 
     const response = await adapter.chat({
+      modelName: 'qwen3:4b',
       messages: [
         { role: 'system', content: 'rules' },
         { role: 'user', content: 'hi' },
@@ -60,10 +61,10 @@ describe('OllamaModelAdapter', () => {
 
   it('sends a JSON schema as format and omits tools when a structured answer is requested', async () => {
     const { fetchFunction, captured } = fakeFetch({ message: { content: '{}' } });
-    const adapter = new OllamaModelAdapter({ baseUrl: 'http://x', modelName: 'm', fetchFunction });
+    const adapter = new OllamaModelAdapter({ baseUrl: 'http://x', fetchFunction });
     const schema = { type: 'object' };
 
-    await adapter.chat({ messages: [{ role: 'user', content: 'hi' }], tools: [], responseSchema: schema });
+    await adapter.chat({ modelName: 'qwen3:4b', messages: [{ role: 'user', content: 'hi' }], tools: [], responseSchema: schema });
 
     expect(captured[0].body.format).toEqual(schema);
     expect(captured[0].body).not.toHaveProperty('tools');
@@ -71,25 +72,25 @@ describe('OllamaModelAdapter', () => {
 
   it('refuses to combine tools with a response schema', async () => {
     const { fetchFunction } = fakeFetch({ message: { content: '' } });
-    const adapter = new OllamaModelAdapter({ baseUrl: 'http://x', modelName: 'm', fetchFunction });
+    const adapter = new OllamaModelAdapter({ baseUrl: 'http://x', fetchFunction });
     await expect(
-      adapter.chat({ messages: [], tools: [CALCULATOR_TOOL], responseSchema: { type: 'object' } }),
+      adapter.chat({ modelName: 'qwen3:4b', messages: [], tools: [CALCULATOR_TOOL], responseSchema: { type: 'object' } }),
     ).rejects.toThrow(/cannot be combined/);
   });
 
   it('turns HTTP errors into ModelUnavailableError with the status', async () => {
     const { fetchFunction } = fakeFetch('model "qwen3:4b" not found', 404);
-    const adapter = new OllamaModelAdapter({ baseUrl: 'http://x', modelName: 'qwen3:4b', fetchFunction });
-    await expect(adapter.chat({ messages: [], tools: [] })).rejects.toThrow(ModelUnavailableError);
-    await expect(adapter.chat({ messages: [], tools: [] })).rejects.toThrow(/HTTP 404.*not found/);
+    const adapter = new OllamaModelAdapter({ baseUrl: 'http://x', fetchFunction });
+    await expect(adapter.chat({ modelName: 'qwen3:4b', messages: [], tools: [] })).rejects.toThrow(ModelUnavailableError);
+    await expect(adapter.chat({ modelName: 'qwen3:4b', messages: [], tools: [] })).rejects.toThrow(/HTTP 404.*not found/);
   });
 
   it('turns network failures into ModelUnavailableError naming the URL', async () => {
     const fetchFunction: FetchFunction = async () => {
       throw new Error('connect ECONNREFUSED 127.0.0.1:11434');
     };
-    const adapter = new OllamaModelAdapter({ baseUrl: 'http://127.0.0.1:11434', modelName: 'm', fetchFunction });
-    await expect(adapter.chat({ messages: [], tools: [] })).rejects.toThrow(
+    const adapter = new OllamaModelAdapter({ baseUrl: 'http://127.0.0.1:11434', fetchFunction });
+    await expect(adapter.chat({ modelName: 'qwen3:4b', messages: [], tools: [] })).rejects.toThrow(
       'Could not reach Ollama at http://127.0.0.1:11434: connect ECONNREFUSED 127.0.0.1:11434',
     );
   });

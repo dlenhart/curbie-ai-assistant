@@ -1,5 +1,15 @@
+import { isIP } from 'node:net';
 import { resolve } from 'node:path';
-import { LOOPBACK_HOSTS } from '../../constants';
+import {
+  DEFAULT_HISTORY_MESSAGE_LIMIT,
+  DEFAULT_HTTP_HOST,
+  DEFAULT_HTTP_PORT,
+  DEFAULT_MAX_TOOL_ROUNDS,
+  DEFAULT_MODEL_NAME,
+  DEFAULT_OLLAMA_BASE_URL,
+  MAX_HISTORY_MESSAGE_LIMIT,
+  MAX_TOOL_ROUNDS_LIMIT,
+} from '../../constants';
 import { InvalidConfigurationError } from './errors/invalid-configuration.error';
 import type { CurbieConfig } from './interfaces/curbie-config.interface';
 import type { Environment } from './types/environment.type';
@@ -12,26 +22,34 @@ export function parseConfig(environment: Environment, defaults: { readonly skill
     );
   }
 
-  const httpHost = readSetting(environment, 'CURBIE_HTTP_HOST') ?? '127.0.0.1';
-  if (!LOOPBACK_HOSTS.has(httpHost)) {
+  const httpHost = readSetting(environment, 'CURBIE_HTTP_HOST') ?? DEFAULT_HTTP_HOST;
+  if (httpHost !== 'localhost' && isIP(httpHost) === 0) {
     throw new InvalidConfigurationError(
-      `CURBIE_HTTP_HOST "${httpHost}" is not a loopback address. LAN access stays disabled until authentication and TLS exist (Phase 2).`,
+      `CURBIE_HTTP_HOST must be an IP address (such as 0.0.0.0 for the home network) or localhost; got "${httpHost}".`,
     );
   }
 
   return {
     dataDirectory,
     skillsDirectory: resolve(readSetting(environment, 'CURBIE_SKILLS_DIR') ?? defaults.skillsDirectory),
-    ollamaBaseUrl: (readSetting(environment, 'OLLAMA_BASE_URL') ?? 'http://127.0.0.1:11434').replace(/\/+$/, ''),
-    modelName: readSetting(environment, 'CURBIE_MODEL') ?? 'qwen3:4b-instruct',
+    ollamaBaseUrl: (readSetting(environment, 'OLLAMA_BASE_URL') ?? DEFAULT_OLLAMA_BASE_URL).replace(/\/+$/, ''),
+    modelName: readSetting(environment, 'CURBIE_MODEL') ?? DEFAULT_MODEL_NAME,
     httpHost,
-    httpPort: readIntegerSetting(environment, 'CURBIE_HTTP_PORT', { defaultValue: 3000, minimum: 1, maximum: 65535 }),
-    historyMessageLimit: readIntegerSetting(environment, 'CURBIE_HISTORY_MESSAGE_LIMIT', {
-      defaultValue: 10,
-      minimum: 0,
-      maximum: 100,
+    httpPort: readIntegerSetting(environment, 'CURBIE_HTTP_PORT', {
+      defaultValue: DEFAULT_HTTP_PORT,
+      minimum: 1,
+      maximum: 65535,
     }),
-    maxToolRounds: readIntegerSetting(environment, 'CURBIE_MAX_TOOL_ROUNDS', { defaultValue: 4, minimum: 1, maximum: 10 }),
+    historyMessageLimit: readIntegerSetting(environment, 'CURBIE_HISTORY_MESSAGE_LIMIT', {
+      defaultValue: DEFAULT_HISTORY_MESSAGE_LIMIT,
+      minimum: 0,
+      maximum: MAX_HISTORY_MESSAGE_LIMIT,
+    }),
+    maxToolRounds: readIntegerSetting(environment, 'CURBIE_MAX_TOOL_ROUNDS', {
+      defaultValue: DEFAULT_MAX_TOOL_ROUNDS,
+      minimum: 1,
+      maximum: MAX_TOOL_ROUNDS_LIMIT,
+    }),
   };
 }
 

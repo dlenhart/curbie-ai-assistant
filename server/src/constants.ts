@@ -6,7 +6,15 @@ export const SKILL_KINDS = ['lookup', 'action', 'generative'] as const;
 export const SKILL_NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
 export const TOOL_NAME_PATTERN = /^[a-z][a-z0-9_]*$/;
 
-export const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(['127.0.0.1', 'localhost', '::1']);
+export const DEFAULT_HTTP_HOST = '127.0.0.1';
+export const DEFAULT_HTTP_PORT = 3000;
+export const DEFAULT_OLLAMA_BASE_URL = 'http://127.0.0.1:11434';
+export const DEFAULT_MODEL_NAME = 'qwen3:4b-instruct';
+export const DEFAULT_HISTORY_MESSAGE_LIMIT = 10;
+export const MAX_HISTORY_MESSAGE_LIMIT = 100;
+export const DEFAULT_MAX_TOOL_ROUNDS = 4;
+export const MAX_TOOL_ROUNDS_LIMIT = 10;
+export const WILDCARD_HTTP_HOSTS: ReadonlySet<string> = new Set(['0.0.0.0', '::']);
 
 export const MAX_CALCULATOR_EXPRESSION_LENGTH = 300;
 export const DISABLED_CALCULATOR_FUNCTIONS: readonly string[] = [
@@ -77,7 +85,29 @@ export const MIGRATIONS = [
       CREATE INDEX messages_by_conversation ON messages (conversation_id);
     `,
   },
+  {
+    version: 2,
+    name: 'settings',
+    sql: `
+      CREATE TABLE settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `,
+  },
 ];
+
+export const UNITS = ['imperial', 'metric'] as const;
+export const DEFAULT_UNITS = 'imperial';
+
+export const SETTINGS_FIELD_ERRORS = {
+  modelRequired: 'Choose a model.',
+  modelNotInstalled: "That model isn't installed in Ollama.",
+  modelCatalogUnavailable: "Couldn't reach Ollama to check which models are installed, so the model wasn't changed.",
+  timeZoneInvalid: 'Choose a time zone from the list.',
+  unitsInvalid: 'Choose imperial or metric.',
+} as const;
 
 export const CONFIG = Symbol('CONFIG');
 export const CLOCK = Symbol('CLOCK');
@@ -88,6 +118,10 @@ export const MODEL = Symbol('MODEL');
 export const TOOL_REGISTRY = Symbol('TOOL_REGISTRY');
 export const ORCHESTRATOR = Symbol('ORCHESTRATOR');
 export const GENERATION_QUEUE = Symbol('GENERATION_QUEUE');
+export const SETTINGS_REPOSITORY = Symbol('SETTINGS_REPOSITORY');
+export const SETTINGS = Symbol('SETTINGS');
+export const MODEL_CATALOG = Symbol('MODEL_CATALOG');
+export const SUPPORTED_TIME_ZONES = Symbol('SUPPORTED_TIME_ZONES');
 
 export const OLLAMA_DEFAULT_TIMEOUT_MILLISECONDS = 180_000;
 export const OLLAMA_CONTEXT_WINDOW_TOKENS = 8192;
@@ -104,8 +138,23 @@ export const HONESTY_RULES: readonly string[] = [
   '- Small talk is fine, but it must not contain factual claims without a source.',
 ];
 
+export const UNIT_DESCRIPTIONS: Readonly<Record<'imperial' | 'metric', string>> = {
+  imperial: 'imperial (°F, miles, pounds, inches, cups)',
+  metric: 'metric (°C, kilometres, kilograms, centimetres, millilitres)',
+};
+
+export const UNIT_LABELS: Readonly<Record<'imperial' | 'metric', string>> = {
+  imperial: 'Imperial (°F, mi)',
+  metric: 'Metric (°C, km)',
+};
+
 export const DONT_KNOW_FALLBACK_TEXT = "I don't have a reliable answer for that.";
 export const MAX_FINALIZE_ATTEMPTS = 2;
+
+export const NAVIGATION_PAGES = [
+  { page: 'chat', label: 'CHAT', href: '/' },
+  { page: 'manage', label: 'MANAGE', href: '/manage' },
+] as const;
 
 export const MAX_MESSAGE_LENGTH = 4000;
 export const CONVERSATION_ID_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;

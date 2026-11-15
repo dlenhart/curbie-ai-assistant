@@ -1,5 +1,10 @@
 import type { SkillDefinition } from '../skills/interfaces/skill-definition.interface';
-import { buildFinalizeInstruction, buildRejectionNotice, buildSystemPrompt } from './system-prompt.builder';
+import {
+  buildFinalizeInstruction,
+  buildHouseholdPreferences,
+  buildRejectionNotice,
+  buildSystemPrompt,
+} from './system-prompt.builder';
 
 const skill: SkillDefinition = {
   name: 'calculator',
@@ -40,5 +45,19 @@ describe('buildRejectionNotice', () => {
     const notice = buildRejectionNotice('Quote not found verbatim in source "src_2".');
     expect(notice).toContain('Quote not found verbatim');
     expect(notice).toContain('"dont_know"');
+  });
+});
+
+describe('buildHouseholdPreferences', () => {
+  it('states the imperial units preference', () => {
+    expect(buildHouseholdPreferences({ modelName: 'm', timeZone: 'UTC', units: 'imperial' })).toBe(
+      "Household preferences:\n- Units: imperial (°F, miles, pounds, inches, cups). Use these when the user doesn't name a unit.",
+    );
+  });
+
+  it('states the metric units preference', () => {
+    expect(buildHouseholdPreferences({ modelName: 'm', timeZone: 'UTC', units: 'metric' })).toBe(
+      "Household preferences:\n- Units: metric (°C, kilometres, kilograms, centimetres, millilitres). Use these when the user doesn't name a unit.",
+    );
   });
 });

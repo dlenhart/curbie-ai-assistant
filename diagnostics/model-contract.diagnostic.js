@@ -23,7 +23,12 @@ token counts, and thinking output.
 
 Run "npm run build" in server/ first; this reads server/dist.`;
 
-const QUESTIONS = ["What's 15% of 340?", 'Convert 3/8 inch to mm', 'Who won the 1987 World Series?'];
+const QUESTIONS = [
+  "What's 15% of 340?",
+  'Convert 3/8 inch to mm',
+  'Who won the 1987 World Series?',
+  "What's today's date?",
+];
 const OLLAMA_BASE_URL = (process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434').replace(/\/+$/, '');
 const REQUEST_TIMEOUT_MILLISECONDS = 300_000;
 const PREVIEW_LENGTH = 300;
@@ -79,14 +84,20 @@ function parseJsonOrEmpty(text) {
   }
 }
 
+function createSettingsReader(modelName) {
+  const settings = { modelName, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, units: 'imperial' };
+  return { current: () => settings };
+}
+
 function createOrchestrator(modelName, fetchFunction) {
   let idCounter = 0;
   const idGenerator = { next: (prefix) => `${prefix}_${++idCounter}` };
-  const toolRegistry = buildToolRegistry(loadSkillDocuments(skillsDirectory), createSkillAdapters(), idGenerator);
+  const settings = createSettingsReader(modelName);
+  const skillAdapters = createSkillAdapters({ clock: { now: () => new Date() }, settings });
+  const toolRegistry = buildToolRegistry(loadSkillDocuments(skillsDirectory), skillAdapters, idGenerator);
   return new ConversationOrchestrator({
     model: new OllamaModelAdapter({
       baseUrl: OLLAMA_BASE_URL,
-      modelName,
       fetchFunction,
       timeoutMilliseconds: REQUEST_TIMEOUT_MILLISECONDS,
     }),
@@ -95,6 +106,7 @@ function createOrchestrator(modelName, fetchFunction) {
     clock: { now: () => new Date() },
     idGenerator,
     systemPrompt: buildSystemPrompt(toolRegistry.registeredSkills()),
+    settings,
     historyMessageLimit: 10,
     maxToolRounds: 4,
   });

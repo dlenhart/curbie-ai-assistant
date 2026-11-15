@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{pageTitle}}</title>
+  <link rel="stylesheet" href="/static/curbie.css">
+</head>
+<body>
+  <main class="chat">
+    <header class="chat__header">CURBIE</header>
+    <nav class="nav" aria-label="Main">
+      {{#each navigation}}<a class="nav__link{{#if isActive}} nav__link--active{{/if}}" href="{{href}}"{{#if isActive}} aria-current="page"{{/if}}>{{label}}</a>{{/each}}
+    </nav>
+    {{{body}}}
+  </main>
+  {{#if scriptPath}}<script src="{{scriptPath}}"></script>{{/if}}
+</body>
+</html>

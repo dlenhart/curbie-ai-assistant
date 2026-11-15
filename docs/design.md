@@ -104,7 +104,7 @@ The web UI uses a neon, cyberpunk style taken from the owner's Floaterball game 
 - **Citations:** listed under the answer with a cyan `▸` marker, in `--muted-text`.
 - **Error state:** red border plus Floaterball's `dangerPulse` glow animation.
 - **Status line:** below the input bar, in cyan. Shows "Curbie is processing…" while a reply is pending and "Disconnected. Reconnecting…" when the socket drops.
-- **Navigation bar** (from Phase 2, when a second page exists): sits between the title box and the main window, styled like Floaterball's `.pause` bar. Links: **CHAT · HISTORY · MANAGE · HEALTH · INBOX**. The current page's link has a soft cyan fill and a bright underline; hover fills it solid cyan. INBOX carries the unread-alert count as a small glowing yellow tag (no emoji). Settings lives inside Manage, not in the nav. On narrow screens the labels shrink so all five fit on one row. Phase 1 has only the chat page and no nav.
+- **Navigation bar** (from Phase 2, when a second page exists): sits between the title box and the main window, styled like Floaterball's `.pause` bar. Links: **CHAT · HISTORY · MANAGE · HEALTH · INBOX**. The current page's link has a soft cyan fill and a bright underline; hover fills it solid cyan. INBOX carries the unread-alert count as a small glowing yellow tag (no emoji). Settings lives inside Manage, not in the nav. On narrow screens the labels shrink so all five fit on one row. Phase 1 has only the chat page and no nav. Links to pages not built yet are hidden: Phase 2 shows CHAT and MANAGE. The frame is one Handlebars layout (`server/views/layout.hbs`), and every page renders inside it.
 - **Shared page frame:** every page uses the same stack: title box, nav, a cyan-bordered main window (solid black inside, grid outside), and an optional framed footer bar for actions.
 - **Buttons:** an exact copy of Floaterball's `.playButton` (dark-gray fill, 2px cyan border, 5px radius, 600 weight, 2px letter spacing, soft cyan glow; on hover the fill turns cyan, text turns black, glow grows, and it lifts 2px over 0.3s). Implemented as real `<button>` elements with `font-family: inherit` and `cursor: pointer`, and `:focus-visible` gets the same styling as hover so keyboard users can see focus.
 
@@ -298,7 +298,7 @@ Rules:
 ### 4.5 Model runtime
 - Ollama adapter behind a model port, so Qwen is swappable.
 - Qwen 2.5 / Qwen 3 class models are trained for function calling. The 7B–8B sizes are known to be reliable at choosing tools and filling arguments; 1.5B–3B models slip more often.
-- **Default: `qwen3:4b-instruct`** (Qwen3-4B-Instruct-2507, decided 2026-11-15 from measurements on the M1, §7.1). It is a non-thinking model: it answers directly instead of writing a reasoning pass first. The original default, `qwen3:4b` (owner's choice, 2026-10-02), is a thinking model; it kept the answer contract but took 20–70 s per reply, because every model call wrote hundreds of reasoning tokens at about 20 tokens/s. Its `think: false` switch didn't help: Ollama serves it through a generic chat template, and the reasoning moved into the reply text instead of stopping. There is no non-thinking 8B. Switching models is a config change (`CURBIE_MODEL`), not a code change.
+- **Default: `qwen3:4b-instruct`** (Qwen3-4B-Instruct-2507, decided 2026-11-15 from measurements on the M1, §7.1). It is a non-thinking model: it answers directly instead of writing a reasoning pass first. The original default, `qwen3:4b` (owner's choice, 2026-10-02), is a thinking model; it kept the answer contract but took 20–70 s per reply, because every model call wrote hundreds of reasoning tokens at about 20 tokens/s. Its `think: false` switch didn't help: Ollama serves it through a generic chat template, and the reasoning moved into the reply text instead of stopping. There is no non-thinking 8B. Switching models is a settings change, not a code change: since Phase 2 any installed model can be picked on the Settings page, and `CURBIE_MODEL` only sets the default (§4.17). The model name travels on each model request, so a switch applies from the next message.
 - **Bounded context and output.** Every call sets `num_ctx` (8,192 tokens) and `num_predict` (512 tokens). Without `num_ctx`, Ollama's 4,096-token default overflowed during a runaway generation and Ollama silently discarded the oldest messages, including the system prompt that holds the answer contract. Without `num_predict`, a runaway only ended at the 180 s timeout. A finalize answer cut off at the limit is invalid JSON, so it takes the normal re-prompt and "don't know" path.
 - **Where the model runs:** on the M1, alongside Curbie. Using the 2013 Mac Pro as a remote model host was considered and dropped (§2).
 - **Keep the main model loaded.** Ollama unloads idle models after ~5 minutes by default, causing a reload delay on the next question. The main model is configured to stay loaded permanently (`keep_alive`). The coding model loads on demand.
@@ -409,6 +409,7 @@ Every turn records a **trace** (retained 30 days, §4.14): what was retrieved (w
 ### 4.13 Time and locale
 - All timestamps are stored in **UTC**.
 - A configured **home time zone** is used to interpret relative times ("at 5", "tonight", "tomorrow morning") and to display times.
+- **The `clock` skill** (Phase 2) answers "what's today's date?" and "what time is it?" from the household time zone. The date comes from a cited tool result, not from the system prompt, so it stays inside the answer contract (§5.1): the honesty rules allow only facts from tool results.
 
 ### 4.14 Data retention
 - **Transcripts, alerts, and turn traces: 30 days.**
@@ -431,7 +432,14 @@ Settings are **configuration, not memory**, and are kept separate from `facts.md
 
 **One level: household.** With no users (§4.7), every setting applies to the whole household: home location, home time zone, morning briefing contents and time, alert email address, units, quiet hours, and email notification preferences. Alerts are delivered using these household settings.
 
-The Settings mockup (`docs/mockups/settings.html`) still shows separate **Household** and **Your settings** groups from before this decision; the built page merges them, or keeps both headings purely as visual grouping.
+The Settings mockup (`docs/mockups/settings.html`) still shows separate **Household** and **Your settings** groups from before this decision; the built page merges them into one HOUSEHOLD group.
+
+**Built in Phase 2** (`/manage/settings`): only settings that something reads today. The rest of the mockup's fields land with the phases that use them.
+- **Model.** Chosen from the models Ollama reports as installed (`/api/tags`). Saving a *changed* model checks that list; saving an unchanged one never calls Ollama, so the other fields can be saved while Ollama is down. Default: `CURBIE_MODEL` (else `qwen3:4b-instruct`), so the environment variable is now only the default.
+- **Home time zone.** Any IANA zone the runtime supports, plus `UTC`. Default: the host's zone. Read by the `clock` skill (§4.13).
+- **Units.** Imperial or metric, default imperial. Added to the system prompt as a household preference, used when the user doesn't name a unit.
+
+Storage is a key-value `settings` table (migration 2) behind a core `HouseholdSettingsService`. Only validated writes reach the table. A stored value that fails validation on read (for example, a zone a later ICU release drops) fails chat turns loudly, but the Settings page shows it as a field error with the default in its place, so it can be saved over without editing SQLite. Invalid defaults (such as an unrecognised host time zone) stop startup with a message naming the field. The orchestrator reads one settings snapshot per turn, so a change applies from the next message, with no restart. Field errors are fixed strings, never echoes of what was submitted, which keeps render locals server-built (§5.7).
 
 ### 4.18 Clarify, don't guess
 When a request is ambiguous, Curbie **asks a clarifying question** instead of silently assuming. Examples: "Remind me Tuesday" said on a Tuesday (today or next week?), or "Add that to the list" when there are several lists. This is the action-skill counterpart of "I don't know."
@@ -517,7 +525,13 @@ The risk was raised and accepted. Any device on the LAN (guests, a friend's phon
 - Browser notifications
 - Wake Lock API (keeps the phone screen on while a recipe is open)
 
-Plan: serve the web UI over TLS with a locally trusted certificate (e.g. via mkcert), with the local CA installed on the devices that use Curbie (phone, Pi, laptops).
+**Decided 2026-11-15: plain HTTP for now, reached by IP address.** TLS via mkcert is deferred, not dropped. Nothing built needs a secure context yet, and voice comes much later, after the chat is refined. When a secure-context feature lands, revisit TLS (mkcert, with the local CA installed on each device). LAN binding is opt-in: `CURBIE_HTTP_HOST=0.0.0.0` (installation.md §1.5a).
+
+**Host and Origin guard** (Phase 2). With no sign-in, the realistic attacks come through a household member's browser: a hostile website opening a WebSocket to Curbie or posting a form to it (cross-site WebSocket hijacking, CSRF), or DNS rebinding. One policy (`request-origin.policy.ts`) checks every HTTP request (Express middleware) and every WebSocket upgrade (`verifyClient`), and answers `403` to:
+- a missing `Host` header, or one whose hostname isn't an IP literal or `localhost` (this defeats DNS rebinding);
+- an `Origin` header whose host doesn't equal `Host`.
+
+A request without `Origin` is allowed: browsers always send it on WebSocket upgrades and cross-origin POSTs, and a non-browser client on the LAN can do everything anyway, because there's no auth. Adding a `.local` name later means adding an allowlist of accepted hostnames.
 
 ### 5.4 Safe evaluation
 Model-produced expressions (calculator, unit conversion, date math) are evaluated by a proper math parser (e.g. mathjs), **never JavaScript `eval`**. Otherwise a model-produced expression becomes arbitrary code execution on the host.
@@ -668,7 +682,6 @@ Raised in a design review (2026-10-02). These are the assumptions everything els
 
 ## 8. Open Questions
 
-- Model confirmation: `qwen3:4b-instruct` is the default (§4.5, §7.1), pending the browser live check.
 - Web search provider.
 - Weather API provider (AccuWeather or alternative), API key handling, and its actual rate limit (believed hourly, to be confirmed).
 - Persona file contents (tone, verbosity).
@@ -683,7 +696,7 @@ Raised in a design review (2026-10-02). These are the assumptions everything els
 - Conversation context policy: turns per request, summarization (§4.11).
 - Recipe ingestion flow: batch scanning (scanner vs. phone photos) and how recipes are reviewed before indexing.
 - Model swapping: acceptable load latency when switching between the general and coding models on 16 GB.
-- Local TLS setup and certificate distribution to devices.
+- Local TLS (mkcert) and certificate distribution, deferred on 2026-11-15 until a feature needs a secure context (§5.3).
 - Watcher condition types for v1 (threshold, keyword match, others?).
 - Morning briefing contents and schedule.
 - Calendar source (which calendar service).

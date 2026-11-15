@@ -1,6 +1,8 @@
 import { Controller, Get, Inject, Render } from '@nestjs/common';
 import { ID_GENERATOR } from '../../constants';
 import type { IdGenerator } from '../../core/shared/interfaces/id-generator.interface';
+import type { NavigationLink } from './interfaces/navigation-link.interface';
+import { buildNavigation } from './navigation.builder';
 
 @Controller()
 export class ChatPageController {
@@ -8,7 +10,12 @@ export class ChatPageController {
 
   @Get('/')
   @Render('chat')
-  showChat(): { conversationId: string } {
-    return { conversationId: this.idGenerator.next('conv') };
+  showChat(): { pageTitle: string; navigation: readonly NavigationLink[]; scriptPath: string; conversationId: string } {
+    return {
+      pageTitle: 'Curbie',
+      navigation: buildNavigation('chat'),
+      scriptPath: '/static/chat.js',
+      conversationId: this.idGenerator.next('conv'),
+    };
   }
 }

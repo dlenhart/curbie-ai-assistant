@@ -1,9 +1,8 @@
 (function () {
   'use strict';
 
-  var main = document.querySelector('.chat');
-  var conversationId = main.dataset.conversationId;
   var log = document.getElementById('chat-log');
+  var conversationId = log.dataset.conversationId;
   var form = document.getElementById('chat-form');
   var input = document.getElementById('chat-input');
   var sendButton = document.getElementById('chat-send');

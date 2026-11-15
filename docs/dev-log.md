@@ -402,3 +402,44 @@ The last exchange was "What will the UI look like?" Claude showed the planned st
 - **Pick the model for the job, not the size.** The planned 4B-vs-8B question turned into thinking vs. non-thinking, and that difference was worth a 5–7× speedup.
 - **Hardware fails quietly too.** A cable or hub can turn a fast SSD into a USB 2 device, and nothing reports it until a 2.5 GB file takes 1.5 minutes to read.
 - **Read the advisory before accepting the risk.** "Critical, no fix available" sounded alarming. Reading the advisory turned it into a precise condition (request data reaching `render()`) and a one-line rule that keeps Curbie clear of it.
+
+## Session 6 — 2026-11-15: Phase 2, from decisions to a built branch
+
+**Goal:** settle the open Phase 2 decisions, write the plan, and build it: reach Curbie from other devices, add the shared page frame, and give it a Settings page.
+
+### How it unfolded
+
+1. **Two decisions in one line.** The owner settled both open questions at once: plain HTTP, reached by IP address. HTTPS only matters for browser features that need a secure context (microphone, notifications, Wake Lock), and voice comes much later. "We have a lot of refining to do with the chat first."
+2. **Which settings to build.** Claude laid out three options: model only, model plus time zone and units, or the whole mockup. The owner picked the middle one, where every setting does something on day one.
+3. **No sign-in still needs a guard.** Recon turned up a risk that "no auth" doesn't cover. A hostile website visited by anyone in the house could open a WebSocket to Curbie, or post its Settings form, through that person's browser. DNS rebinding was a second route. The fix doesn't touch the no-auth decision: refuse any `Host` that isn't an IP or `localhost`, and any `Origin` that doesn't match the `Host`.
+4. **The date belongs to a tool, not the prompt.** Putting today's date in the system prompt would have been the easy path, but the honesty rules say facts come only from tool results. So the date became a `clock` skill: a cited source, like the calculator.
+5. **The model moved onto the request.** Choosing a model on a web page meant the model name could no longer be fixed when the adapter is built. It now travels on every model request, read from one settings snapshot per turn. That's also the hook Phase 11's coding-model routing needs.
+6. **Built in one pass.** The owner chose inline execution: "just power through all tasks and we'll check in at the end." Eight tasks, test first, on a branch, uncommitted. Small rulings along the way are listed under Decided.
+7. **The review found a lockout.** A fresh reviewer read the whole branch and found that a bad stored setting (or a host time zone the runtime doesn't list) broke the Settings page, which was the only screen that could fix it. Chat still fails loudly, but the Settings page now shows the bad field and lets it be saved over, and bad defaults stop startup. Thirteen smaller notes were deferred for the owner.
+
+### Decided
+- **Plain HTTP by IP; TLS deferred** until a feature needs a secure context (design §5.3).
+- **LAN binding is opt-in:** `CURBIE_HTTP_HOST=0.0.0.0`. The default stays loopback.
+- **Host/Origin guard** on every HTTP request and WebSocket upgrade (design §5.3).
+- **Settings now: model, time zone, units** (design §4.17). `CURBIE_MODEL` becomes only the default. A model must be installed to be chosen, and saving an unchanged model never calls Ollama.
+- **`clock` skill** for the date and time (design §4.13).
+- **Field errors never echo input,** which keeps the `hbs` render-locals rule (design §5.7).
+- **Rulings while building:**
+  - No `@types/express` or `@types/hbs` (no new dependencies), so the middleware uses Node's `http` types, and the nav is inlined in the layout instead of registered as a partial.
+  - The catalog adapter has its own GET-shaped fetch type.
+
+### Produced
+- `server/`: config (LAN host, defaults moved to `constants.ts`), `request-origin.policy.ts`, the settings core (`core/settings/`) with SQLite and in-memory repositories under one contract test, migration 2, the Ollama model catalog adapter, the orchestrator reading settings per turn, the `clock` adapter, `views/layout.hbs`, the Manage and Settings pages, and `public/curbie.css` (replacing `chat.css`). 229 tests in 29 suites.
+- `skills/clock.md`.
+- `diagnostics/model-contract.diagnostic.js`: updated for the per-request model, plus a date question.
+- Docs: design §4.1.0, §4.5, §4.13, §4.17, §5.3, §8; `installation.md` §1.4 and the new §1.5a; README; the Phase 1 plan's phase map.
+
+### Still open
+- The owner's review and live check, including from a phone (the plan's Task 8, Step 3).
+- Phase 3 planning (documents and recipes).
+- Carried over: drive speed, model memory when idle, Time Machine.
+
+### Takeaways for the blog
+- **"No auth" isn't "no security."** Deciding against sign-in still left a browser-shaped hole. The guard is a few lines, and it's about where requests come *from*, not *who* sends them.
+- **Keep facts in tools, even the boring ones.** Today's date is the most trivial fact there is, and it still went through a cited tool, because the rule only works if it has no exceptions.
+- **A settings page changes the shape of the code.** Making one value user-editable moved the model name from wiring onto every request, and that turned out to be the right shape anyway.

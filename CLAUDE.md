@@ -8,9 +8,11 @@ Phase 1 (walking skeleton) is done: all 12 plan tasks, 152 tests in 20 suites, c
 
 **The M1 is set up.** Ollama runs under Curbie's own LaunchAgent, with its models on the `CURBIE_BRAIN` USB drive (`installation.md` §1.3a). Use `scripts/ollama-service.sh start|stop|status`, and stop Ollama before ejecting the drive. The data dir is `/Volumes/CURBIE_BRAIN/curbie`.
 
-**Next session:** follow `docs/next-session.md`. In short: the Phase 2 decisions, then the Phase 2 plan. The `npm audit` triage is done (design §5.7). The `hbs` advisory is accepted on one condition: render locals come only from server-side values, never from request data.
+**Phase 2 is built (2026-11-15), uncommitted on branch `phase-2-lan-settings-frame`. The manual check has NOT been done yet: start with the 10 steps in `docs/next-session.md` §1.** Plan: `docs/superpowers/plans/2026-11-15-curbie-phase-2-lan-settings-frame.md`. 229 tests in 29 suites. Plain HTTP by IP (TLS deferred), opt-in LAN binding (`CURBIE_HTTP_HOST=0.0.0.0`), a Host/Origin guard, the shared page frame and nav, the Manage hub, a Settings page (model, time zone, units in SQLite), and a `clock` skill (design §4.13, §4.17, §5.3).
 
-**Phase 2 (planning, no plan or code yet):** decided: **no users and no authentication, ever.** Curbie is an open chat for anyone on the home network (design §4.7, §5.3). Settings are household-only (§4.17). Still to decide: HTTPS via mkcert or plain HTTP on the LAN (trade-offs in §5.3), how devices reach Curbie (IP address or a name like `curbie.local`), and which settings to build now. Then write the Phase 2 plan in `docs/superpowers/plans/`.
+**Next session:** follow `docs/next-session.md`. The `hbs` advisory is accepted on one condition: render locals come only from server-side values, never from request data (design §5.7).
+
+**Standing decisions:** **no users and no authentication, ever.** Curbie is an open chat for anyone on the home network (design §4.7, §5.3). Settings are household-only (§4.17).
 
 ### Commands
 
@@ -27,7 +29,7 @@ Run from `server/`:
 - `server/src/adapters/`: model (Ollama), persistence (SQLite), skills (calculator, skill loader), system (clock, IDs), web (gateway, controller, app configurator).
 - `server/src/infrastructure/config/`: environment parsing.
 - `server/src/app.module.ts` is the composition root; `server/src/main.ts` boots the server.
-- `server/views/` (Handlebars) and `server/public/` (client JS and CSS); `skills/` at the repo root holds skill documents.
+- `server/views/` (Handlebars: `layout.hbs` is the shared frame with the nav; each page renders inside it) and `server/public/` (`curbie.css`, copied from the mockups, plus client JS); `skills/` at the repo root holds skill documents.
 - `diagnostics/`: scripts that run the built server code against a real Ollama. `model-contract.diagnostic.js` asks the Phase 1 contract questions and logs every model call's timing and tokens (`--help` for usage). It needs a running Ollama and `npm run build` first. It's the seed of Phase 8's eval harness.
 
 ## Source of truth

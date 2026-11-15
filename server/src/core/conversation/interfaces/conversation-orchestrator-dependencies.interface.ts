@@ -1,3 +1,4 @@
+import type { HouseholdSettingsReader } from '../../settings/interfaces/household-settings-reader.interface';
 import type { ModelPort } from '../../model/interfaces/model-port.interface';
 import type { Clock } from '../../shared/interfaces/clock.interface';
 import type { IdGenerator } from '../../shared/interfaces/id-generator.interface';
@@ -11,6 +12,7 @@ export interface ConversationOrchestratorDependencies {
   readonly clock: Clock;
   readonly idGenerator: IdGenerator;
   readonly systemPrompt: string;
+  readonly settings: HouseholdSettingsReader;
   readonly historyMessageLimit: number;
   readonly maxToolRounds: number;
 }

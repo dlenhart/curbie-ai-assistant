@@ -9,7 +9,7 @@ Curbie is an experiment in building a self-contained, partly offline AI assistan
 - **Policies live in code, not prompts.** A small model told "ask first" will eventually skip asking, so the harness enforces the rules itself.
 - **Local and private.** The model, data, and UI all run on one machine on the LAN. Nothing is exposed to the internet.
 
-> **Status:** Phase 1 (walking skeleton) is done: chat over WebSocket, a calculator skill, the answer contract, and SQLite transcripts. It passed the live go/no-go check on the M1 with `qwen3:4b-instruct` (replies in 4–12 s). Phase 2 (LAN access and settings) is being planned. Later phases are mapped in the [Phase 1 plan](docs/superpowers/plans/2026-10-01-curbie-phase-1-walking-skeleton.md#phase-map).
+> **Status:** Phase 1 (walking skeleton) is done: chat over WebSocket, a calculator skill, the answer contract, and SQLite transcripts. It passed the live go/no-go check on the M1 with `qwen3:4b-instruct` (replies in 4–12 s). Phase 2 (LAN access, settings, page frame) is built and awaiting the owner's live check: other devices reach Curbie at `http://<Mac's IP>:3000`, and a Settings page picks the model, time zone, and units. Later phases are mapped in the [Phase 1 plan](docs/superpowers/plans/2026-10-01-curbie-phase-1-walking-skeleton.md#phase-map).
 
 ### Name inspiration
 
@@ -101,9 +101,9 @@ Then open <http://127.0.0.1:3000>.
 | Variable | Default | Notes |
 |---|---|---|
 | `CURBIE_DATA_DIR` | *(required)* | Absolute path to the data folder |
-| `CURBIE_MODEL` | `qwen3:4b-instruct` | Ollama model tag |
+| `CURBIE_MODEL` | `qwen3:4b-instruct` | Default Ollama model tag; the Settings page overrides it |
 | `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | |
-| `CURBIE_HTTP_HOST` | `127.0.0.1` | Loopback only in Phase 1. LAN binding arrives in Phase 2. |
+| `CURBIE_HTTP_HOST` | `127.0.0.1` | IP address or `localhost`; `0.0.0.0` serves the home network |
 | `CURBIE_HTTP_PORT` | `3000` | |
 | `CURBIE_SKILLS_DIR` | repo `skills/` | |
 | `CURBIE_HISTORY_MESSAGE_LIMIT` | `10` | 0–100 past messages sent to the model |
@@ -195,7 +195,7 @@ The suite covers the core domain, every adapter, the architecture rules, and an 
 | Phase | Scope |
 |---|---|
 | **1. Walking skeleton** | Chat, calculator, answer contract, SQLite transcripts (built) |
-| 2. LAN access & settings | LAN binding, HTTPS decision, page frame and nav, Manage hub, Settings |
+| **2. LAN access & settings** | LAN over plain HTTP, Host/Origin guard, page frame and nav, Manage hub, Settings, clock skill (built) |
 | 3. Documents & recipes | Full-text search, ingestion, Apple Vision OCR helper, recipe scaling |
 | 4. Scheduler & notifications | Timers, reminders, alert inbox, email, quiet hours, health checks |
 | 5. Memory | Long-term facts, lists, logs, conversation history and resume, undo |
