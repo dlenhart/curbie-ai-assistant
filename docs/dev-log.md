@@ -321,3 +321,72 @@ The last exchange was "What will the UI look like?" Claude showed the planned st
 - **A fake dependency is a cheap stand-in for expensive hardware.** One small script replaced a GPU-backed model for every UI and pipeline check, and left only the question it can't answer (does the model behave?) for the real machine.
 - **Say what "done" means.** "Phase 1 is built" was true, but read as "the project is done." Naming the phase count up front avoids that.
 - **Your shell is part of the environment.** Two aliases (`ls` → eza, `cd` → zoxide) caused the session's only confusing moments.
+
+---
+
+## Session 5 — 2026-11-15: The live check on the M1
+
+**Goal:** get the M1 to a working baseline, install Ollama and the models, and run the Phase 1 go/no-go check (Task 12 Step 7): can a small local Qwen keep the answer contract at a usable speed?
+
+### How it unfolded
+
+1. **Resuming from a written plan.** A 2026-11-13 repo analysis had left `docs/next-session.md`, a step-by-step resume plan recording the M1's state: no Ollama, an incomplete copied `node_modules`, and 27 `npm audit` findings. The session started by reading it back, and nothing had to be rediscovered.
+2. **Models on the USB drive.** The owner asked whether the models could live on the project's external drive (`CURBIE_BRAIN`, a 500 GB APFS SSD). Ollama reads `OLLAMA_MODELS`, but how the variable is set depends on how Ollama runs: `launchctl setenv` doesn't survive a reboot, and `brew services` ignores it and can be overwritten by upgrades. The answer was Curbie's own LaunchAgent running `ollama serve`, with `KeepAlive` → `PathState` so Ollama only runs while the drive's models folder exists. The models went to `ollama-models/` *beside* the data dir, not inside it, so they stay out of its backups.
+3. **A paste that never ended.** Pasting the heredoc that wrote the plist left the terminal stuck at `heredoc>`. The copied lines had picked up leading spaces, so the closing `EOF` was never recognized. Claude wrote the file directly instead and validated it with `plutil -lint`.
+4. **A disk-space detour.** The owner had deleted "gigs worth of data" and the free space didn't move. The cause was Time Machine local snapshots: both backup drives had been unplugged since about August 1, so a three-month-old snapshot was still holding every deleted file. Snapshots are copy-on-write and are not real backups.
+5. **The baseline.** `npm ci` replaced the broken `node_modules`, and the full suite passed on the M1 exactly as on the M2: 152 tests in 20 suites.
+6. **The first live question took over two minutes.** It came back correct (**Sourced**, 51), but slowly, for two separate reasons:
+   - **The drive.** The model loaded at about 2 MB/s. The drive's NVMe-to-USB bridge was linked at USB 2 speed (480 Mb/s) behind a hub, on a Mac whose own ports do 40 Gb/s. Loading only happens once, because Curbie pins the model in memory.
+   - **The model.** Even with the model loaded, a calculator answer took about 38 s over three model calls. The Ollama adapter never turned off Qwen3's thinking mode, so every call wrote a long reasoning pass first.
+7. **The second question failed in a way that mattered.** "Convert 3/8 inch to mm" ended in "The model isn't responding." Ollama's log told the real story: the finalize call generated more than 3,500 tokens without stopping, overflowed Ollama's default 4,096-token context window, and Ollama **silently discarded the oldest half of the conversation, including the system prompt that holds the answer contract**. The 180 s timeout finally ended it. Nothing in the request capped the output or set the context size.
+8. **Pause and diagnose (Claude's recommendation; the owner's direction to focus on speed).** Claude recommended stopping the check, since it was measuring configuration gaps, not the model. The owner agreed, and asked to work out the performance first so the results would mean something. Claude wrote a throwaway diagnostic that runs the real orchestrator and Ollama adapter with a logging fetch, recording every call's tokens, timing, and thinking output. Three settings on `qwen3:4b`:
+   - Default and thinking explicitly on behaved the same: 800–2,200 characters of hidden reasoning per call, 27–66 s per reply.
+   - **"Thinking off" didn't turn thinking off.** The reasoning moved into the visible reply text ("Okay, let's see…") and was fed back into the next call, making prompts longer. Ollama serves this model through a generic `chatml` template, so the switch never reached the model.
+   - The contract held, 9 of 9 across the three settings, though one accepted answer was garbled ("0.15 * 3: 51"). The model could keep the contract; it just couldn't do it quickly.
+9. **A non-thinking model.** Qwen3-4B-Instruct-2507 (`qwen3:4b-instruct`) answers without a reasoning pass. Three repetitions of the three contract checks: **9 of 9, at 3.6–9.4 s per reply**, with quotes matching the calculator output exactly. Each call now produces 14–91 tokens instead of hundreds. There is no non-thinking 8B, and the thinking 8B would be about twice as slow as the thinking 4B, so the 8B dropped out of the comparison. The owner kept it installed: the drive exists for this project.
+10. **The contract caught a hallucination.** In one run, the model's tool-phase text claimed *"The 1987 World Series was won by the Philadelphia Phillies"*. It was the Minnesota Twins. The finalize step still answered "don't know," because there was no source to cite, and the tool-phase text is never shown. This is the design working: the model made something up, and the code stopped it from reaching the user.
+11. **The fix, test first.**
+    - The default model is now `qwen3:4b-instruct`.
+    - Every request sets `num_ctx: 8192` and `num_predict: 512`.
+    - A finalize answer cut off at the limit is invalid JSON, so it takes the existing re-prompt and "don't know" path. No new code path was needed.
+12. **The live check, take two: all six pass.** Timed from Ollama's log:
+
+    | Check | Result | Time |
+    |---|---|---|
+    | 15% of 340 | Sourced, "15% of 340 is 51." | ~12 s |
+    | 3/8 in → mm | Sourced, "3/8 inch is 9.525 mm." | ~11 s |
+    | 1987 World Series | Don't know | ~4 s |
+    | `<b>bold</b>` | Literal text, Generated | ~3.5 s |
+    | Hi Curbie | Conversational, no badge | ~3.4 s |
+    | Ollama stopped | Error, immediately; recovered when Ollama returned | instant |
+
+    Finalize took about 8 s in the browser against about 5 s in the scripted runs. Conversation history makes the prompt longer, a preview of what retrieval will cost.
+13. **"Make me a script so I don't forget."** The owner asked for the `launchctl` command in a script. `scripts/ollama-service.sh` handles `start`, `stop` (before ejecting the drive), `restart`, and `status`. It refuses to start without the drive and copes with being run twice. The installer gained a model-storage check, and it now offers this service instead of `brew services`, which would have quietly put models on the internal disk.
+
+### Decided
+- **Default model: `qwen3:4b-instruct`** (design §4.5). Thinking models kept the contract but were too slow; the non-thinking 4B kept it at a usable speed.
+- **Bounded context and output on every call:** 8,192 and 512 tokens (design §4.5). Without them, a runaway generation silently cut the contract out of the prompt.
+- **The go/no-go gate is passed.** Phase 1 is done.
+- **Models live on the project drive, beside the data dir,** under Curbie's own LaunchAgent (design §6b, `installation.md` §1.3a).
+
+### Produced
+- `server/`: the new default model and the `num_ctx`/`num_predict` options, with their specs updated first. 152 tests in 20 suites.
+- `scripts/ollama-service.sh`, plus a model-storage check in `scripts/install.sh`.
+- `diagnostics/model-contract.diagnostic.js`: the diagnostic from this session, kept as the seed of Phase 8's eval harness. It runs the real orchestrator and Ollama adapter and logs every call's timing, tokens, and thinking output.
+- `~/Library/LaunchAgents/com.curbie.ollama.plist` on the M1 (outside the repo; documented in `installation.md` §1.3a).
+- Docs: design §4.5, §6b, §7.1, §8; `installation.md`; `README.md`; the Phase 1 plan's Step 7 marked done.
+
+### Still open
+- `npm audit` triage (handlebars critical; body-parser and multer high) before Phase 2 opens Curbie to the LAN.
+- Phase 2 decisions: HTTPS or plain HTTP, IP address or `curbie.local`, which settings to build now.
+- Move the drive to a direct USB-C port with a 10 Gb/s cable.
+- The config parser keeps its defaults inline, against the single-constants-file rule.
+
+### Takeaways for the blog
+- **Read the server log, not the error message.** "The model isn't responding" was true but useless. Ollama's log showed a 3,500-token runaway, a context overflow, and a silently discarded system prompt.
+- **Defaults are decisions you didn't make.** Ollama's default context size and unlimited output, and Qwen3's default thinking mode, shaped every result until they were set on purpose.
+- **"Off" isn't always off.** The thinking switch was accepted without complaint and quietly did nothing useful. Measure what a setting actually does.
+- **Keeping the contract and being usable are separate tests.** Every model kept the contract; only one did it fast enough to use.
+- **The harness earned its keep on day one.** A real hallucination (the Phillies) was produced and then blocked by code, not by the prompt.
+- **Pick the model for the job, not the size.** The planned 4B-vs-8B question turned into thinking vs. non-thinking, and that difference was worth a 5–7× speedup.
+- **Hardware fails quietly too.** A cable or hub can turn a fast SSD into a USB 2 device, and nothing reports it until a 2.5 GB file takes 1.5 minutes to read.

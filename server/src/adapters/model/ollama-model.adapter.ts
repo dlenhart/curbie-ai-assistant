@@ -1,4 +1,8 @@
-import { OLLAMA_DEFAULT_TIMEOUT_MILLISECONDS } from '../../constants';
+import {
+  OLLAMA_CONTEXT_WINDOW_TOKENS,
+  OLLAMA_DEFAULT_TIMEOUT_MILLISECONDS,
+  OLLAMA_MAX_OUTPUT_TOKENS,
+} from '../../constants';
 import { ModelUnavailableError } from '../../core/model/errors/model-unavailable.error';
 import type { ModelPort } from '../../core/model/interfaces/model-port.interface';
 import type { ModelRequest } from '../../core/model/interfaces/model-request.interface';
@@ -23,6 +27,7 @@ export class OllamaModelAdapter implements ModelPort {
       model: this.options.modelName,
       stream: false,
       keep_alive: -1,
+      options: { num_ctx: OLLAMA_CONTEXT_WINDOW_TOKENS, num_predict: OLLAMA_MAX_OUTPUT_TOKENS },
       messages: request.messages.map(toOllamaMessage),
       ...(request.tools.length > 0 ? { tools: request.tools.map(toOllamaTool) } : {}),
       ...(request.responseSchema !== undefined ? { format: request.responseSchema } : {}),

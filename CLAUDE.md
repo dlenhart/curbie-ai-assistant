@@ -4,11 +4,13 @@ A small, self-hosted AI assistant running a local Qwen model through Ollama on a
 
 ## Status
 
-Phase 1 (walking skeleton) is built: all 12 plan tasks, 152 tests in 20 suites, clean typecheck and build. The one step left is Task 12 Step 7, the live go/no-go check against `qwen3:4b` vs. `qwen3:8b`. It runs on the M1; the dev machine has no Ollama or models. Plans for Phase 2+ are written as each phase lands (see the phase map in the Phase 1 plan).
+Phase 1 (walking skeleton) is done: all 12 plan tasks, 152 tests in 20 suites, clean typecheck and build. The live go/no-go check passed on the M1 on 2026-11-15 with **`qwen3:4b-instruct`**, which replaced `qwen3:4b` as the default. Thinking models kept the answer contract but took 20–70 s per reply; the non-thinking 4B keeps it at 4–12 s. Every Ollama call now sets `num_ctx` and `num_predict` (design §4.5, §7.1; Session 5 in the dev log).
 
-**Next session (on the M1):** follow the step-by-step resume plan in `docs/next-session.md` (written 2026-11-13; it records the current machine state, including the broken `node_modules`). In short: run `scripts/install.sh` (it checks for Node, Ollama, and the models and offers to install them), create the data folder and its marker (`docs/installation.md` §1.3), then `cd server && npm ci && npm test && npm run build`, and run the live check in Task 12 Step 7. Record its results in the dev log. Also open: the `npm audit` warnings from the first install.
+**The M1 is set up.** Ollama runs under Curbie's own LaunchAgent, with its models on the `CURBIE_BRAIN` USB drive (`installation.md` §1.3a). Use `scripts/ollama-service.sh start|stop|status`, and stop Ollama before ejecting the drive. The data dir is `/Volumes/CURBIE_BRAIN/curbie`.
 
-**Phase 2 (started planning, no plan or code yet):** decided: **no users and no authentication, ever.** Curbie is an open chat for anyone on the home network (design §4.7, §5.3). Settings are household-only (§4.17). Next decision: HTTPS via mkcert or plain HTTP on the LAN (trade-offs in §5.3). Then the remaining planning questions: how devices reach Curbie (IP address or a name like `curbie.local`), and which settings to build now. Then write the Phase 2 plan in `docs/superpowers/plans/`.
+**Next session:** follow `docs/next-session.md`. In short: `npm audit` triage, then the Phase 2 decisions, then the Phase 2 plan.
+
+**Phase 2 (planning, no plan or code yet):** decided: **no users and no authentication, ever.** Curbie is an open chat for anyone on the home network (design §4.7, §5.3). Settings are household-only (§4.17). Still to decide: HTTPS via mkcert or plain HTTP on the LAN (trade-offs in §5.3), how devices reach Curbie (IP address or a name like `curbie.local`), and which settings to build now. Then write the Phase 2 plan in `docs/superpowers/plans/`.
 
 ### Commands
 
@@ -17,7 +19,7 @@ Run from `server/`:
 - `npm ci`: install exact pinned dependencies.
 - `npm test`: the full Jest suite, including the architecture rules and the end-to-end integration test (no Ollama needed; the model is scripted).
 - `npm run typecheck`, then `npm run build` (output in `dist/`).
-- `CURBIE_DATA_DIR=/absolute/path npm start`: run the server at `http://127.0.0.1:3000`. The data folder must already contain an empty `.curbie-data-dir` marker file, or startup refuses. Other settings are in `docs/installation.md`.
+- `CURBIE_DATA_DIR=/Volumes/CURBIE_BRAIN/curbie npm start`: run the server at `http://127.0.0.1:3000`. The data folder must already contain an empty `.curbie-data-dir` marker file, or startup refuses. Other settings are in `docs/installation.md`.
 
 ### Layout
 
@@ -26,6 +28,7 @@ Run from `server/`:
 - `server/src/infrastructure/config/`: environment parsing.
 - `server/src/app.module.ts` is the composition root; `server/src/main.ts` boots the server.
 - `server/views/` (Handlebars) and `server/public/` (client JS and CSS); `skills/` at the repo root holds skill documents.
+- `diagnostics/`: scripts that run the built server code against a real Ollama. `model-contract.diagnostic.js` asks the Phase 1 contract questions and logs every model call's timing and tokens (`--help` for usage). It needs a running Ollama and `npm run build` first. It's the seed of Phase 8's eval harness.
 
 ## Source of truth
 

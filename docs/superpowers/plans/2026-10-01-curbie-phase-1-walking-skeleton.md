@@ -8,7 +8,7 @@
 
 **Tech Stack:** Node ≥ 20.19 (the M1 host runs Node 24), TypeScript 5.9.3, NestJS 11.2.7, `@nestjs/platform-ws`, better-sqlite3 12.11.1, Handlebars (`hbs`), mathjs 15, ajv 8, gray-matter, Jest 30 + ts-jest.
 
-**Build status (2026-10-09):** every step is done except Task 12 Step 7, the live check on the M1. The code samples below use the original layout; the built code moved interfaces, types, and errors into role folders, renamed files with role suffixes, and moved all constants and DI tokens into `server/src/constants.ts` (see `CLAUDE.md`). The real code under `server/src/` is the reference.
+**Build status (2026-11-15):** every step is done, including Task 12 Step 7, the live check on the M1. It passed with `qwen3:4b-instruct`, which replaced `qwen3:4b` as the default (results in design §7.1 and the Session 5 dev-log entry). The code samples below use the original layout; the built code moved interfaces, types, and errors into role folders, renamed files with role suffixes, and moved all constants and DI tokens into `server/src/constants.ts` (see `CLAUDE.md`). The real code under `server/src/` is the reference.
 
 **Spec:** `docs/design.md`. Read it before starting. It is the source of truth for *why*. This plan is the *how* for Phase 1.
 
@@ -4490,7 +4490,9 @@ CURBIE_DATA_DIR=/Volumes/DoesNotExist npm start; echo "exit code: $?"
 
 Expected: a `DataDirectoryUnavailableError … Is the USB drive mounted?` message, then `exit code: 1`.
 
-- [ ] **Step 7: Live verification on the M1 (owner, manual)**
+- [x] **Step 7: Live verification on the M1 (owner, manual)**
+
+**Result (2026-11-15):** go. All six checks passed in the browser with `qwen3:4b-instruct`. The planned 4B-vs-8B comparison became a thinking-vs-non-thinking comparison; see design §4.5 and §7.1 for the numbers and the reasons.
 
 Curbie and the model both run on the M1, which has Ollama and Node 24. Two runs are compared with the same checks (design §4.5, §7.1):
 

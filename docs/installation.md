@@ -12,7 +12,7 @@ scripts/install.sh --check     # report only; never prompts or installs
 scripts/install.sh --dry-run   # asks every question, but prints the command each "yes" would run instead of running it
 ```
 
-It covers the platform, Xcode Command Line Tools, Homebrew, Node (≥ 20.19, offers `node@24`), Ollama (installed and responding), the `qwen3:4b` and coding models, the data directory (exists, writable, on `/Volumes`, marker file, free space; reads `CURBIE_DATA_DIR` or asks), and system sleep (only changed if you confirm this is the always-on host). Later-phase items such as mkcert are reported, not installed. Knowledge downloads (§4) and accounts (§1.6) stay manual.
+It covers the platform, Xcode Command Line Tools, Homebrew, Node (≥ 20.19, offers `node@24`), Ollama (installed and responding; offers to start Curbie's Ollama service if it's set up), model storage (the service keeps models on the USB drive, §1.3a), the `qwen3:4b-instruct` and coding models, the data directory (exists, writable, on `/Volumes`, marker file, free space; reads `CURBIE_DATA_DIR` or asks), and system sleep (only changed if you confirm this is the always-on host). Later-phase items such as mkcert are reported, not installed. Knowledge downloads (§4) and accounts (§1.6) stay manual.
 
 ## 1. Host: Mac M1 (16 GB)
 
@@ -24,8 +24,8 @@ It covers the platform, Xcode Command Line Tools, Homebrew, Node (≥ 20.19, off
 | Homebrew | https://brew.sh | Optional, but the easiest way to install and update everything below. |
 | Node.js 24 LTS (includes npm) | `brew install node@24` or a version manager (fnm, nvm) | The plan requires Node ≥ 20.19 and targets 24 on the M1. |
 | Ollama | Mac app from https://ollama.com, or `brew install ollama` | Runs as a background service on `http://127.0.0.1:11434`. Kept alive under launchd (§4.8). |
-| Qwen general model | `ollama pull qwen3:4b` | About 2.5 GB. The plan's default; overridable with `CURBIE_MODEL`. |
-| Qwen baseline model (for the Phase 1 comparison) | `ollama pull qwen3:8b` | About 5 GB. Used to compare against 4B in the Phase 1 live check (design §7.1). |
+| Qwen general model | `ollama pull qwen3:4b-instruct` | About 2.5 GB. The default since 2026-11-15 (design §4.5); overridable with `CURBIE_MODEL`. |
+| Qwen baseline model (optional) | `ollama pull qwen3:8b` | About 5 GB. A thinking-mode model kept for comparisons (design §7.1); too slow to be the default. |
 
 **No separate install needed:**
 - **SQLite:** `better-sqlite3` bundles its own SQLite, including FTS5. macOS also ships a `sqlite3` CLI for inspecting databases by hand.
@@ -42,7 +42,15 @@ It covers the platform, Xcode Command Line Tools, Homebrew, Node (≥ 20.19, off
 
 ### 1.3 Hardware and macOS setup
 
-- **External USB drive for the data dir.** Full Wikipedia, Gutenberg, scans, and indexes may pass 100 GB (§6b). Suggested: a 1 TB SSD formatted APFS, so index rebuilds have headroom.
+- **External USB drive for the data dir and the models.** Full Wikipedia, Gutenberg, scans, and indexes may pass 100 GB (§6b). Suggested: a 1 TB SSD formatted APFS, so index rebuilds have headroom. The current drive is a 500 GB APFS SSD named `CURBIE_BRAIN`, laid out as:
+
+  ```
+  /Volumes/CURBIE_BRAIN/
+  ├── curbie/          the data dir (CURBIE_DATA_DIR), backed up
+  └── ollama-models/   Ollama's models (OLLAMA_MODELS, §1.3a), re-downloadable, not backed up
+  ```
+
+- **Connect the drive at USB 3 speed or faster.** Plug it straight into one of the Mac's USB-C ports with a cable rated 10 Gb/s, not through a hub or a USB 2 cable. On a USB 2 link the drive read at about 2 MB/s, so loading a 2.5 GB model took about 1.5 minutes. Check the link with `system_profiler SPUSBHostDataType` (look for the drive's `Link Speed`).
 - **Data dir marker.** Curbie refuses to start unless the data dir exists and contains a marker file:
 
   ```bash
@@ -53,12 +61,63 @@ It covers the platform, Xcode Command Line Tools, Homebrew, Node (≥ 20.19, off
 - **Separate backup destination**, not the same USB drive (Time Machine disk or a second drive).
 - **Keep the Mac awake** so timers fire on time: System Settings → Energy, or `sudo pmset -a sleep 0`.
 
+### 1.3a Keeping models on the USB drive
+
+Ollama stores models in `~/.ollama/models` on the internal disk unless `OLLAMA_MODELS` says otherwise. Curbie runs Ollama as its own LaunchAgent with that variable pointing at the drive, instead of `brew services start ollama` (which ignores it).
+
+1. Create the folder: `mkdir -p /Volumes/CURBIE_BRAIN/ollama-models`.
+2. Save this as `~/Library/LaunchAgents/com.curbie.ollama.plist` (replace `<you>` with your macOS username, and adjust the drive name if yours differs):
+
+   ```xml
+   <?xml version="1.0" encoding="UTF-8"?>
+   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+   <plist version="1.0">
+   <dict>
+     <key>Label</key>
+     <string>com.curbie.ollama</string>
+     <key>ProgramArguments</key>
+     <array>
+       <string>/opt/homebrew/bin/ollama</string>
+       <string>serve</string>
+     </array>
+     <key>EnvironmentVariables</key>
+     <dict>
+       <key>OLLAMA_MODELS</key>
+       <string>/Volumes/CURBIE_BRAIN/ollama-models</string>
+     </dict>
+     <key>KeepAlive</key>
+     <dict>
+       <key>PathState</key>
+       <dict>
+         <key>/Volumes/CURBIE_BRAIN/ollama-models</key>
+         <true/>
+       </dict>
+     </dict>
+     <key>StandardOutPath</key>
+     <string>/Users/<you>/Library/Logs/ollama.log</string>
+     <key>StandardErrorPath</key>
+     <string>/Users/<you>/Library/Logs/ollama.log</string>
+   </dict>
+   </plist>
+   ```
+
+   Write it with an editor, not by pasting a heredoc into the terminal: copied lines can pick up leading spaces, and then the shell never sees the closing `EOF`. Check it with `plutil -lint`.
+3. Start it with `scripts/ollama-service.sh start`, then pull the models (§1.1). They download straight to the drive.
+
+How it behaves:
+- **`KeepAlive` → `PathState`** keeps Ollama running only while the models folder exists, so it never starts against an unplugged drive. There is deliberately no `RunAtLoad`, which would start it regardless.
+- **It starts at login** when the drive is attached.
+- **`scripts/ollama-service.sh`** wraps launchd: `start` (refuses if the drive isn't mounted), `stop` (run it before ejecting the drive, or macOS reports the disk in use), `restart`, and `status` (shows loaded models).
+- **Logs** go to `~/Library/Logs/ollama.log`. Ollama's own request log there also gives per-call timings (`POST "/api/chat"` lines).
+- **Curbie pins its model in memory** (`keep_alive: -1`), so only the first question after Ollama starts waits on reading the model from the drive.
+- **Moving existing models:** stop Ollama, `mv ~/.ollama/models/* /Volumes/CURBIE_BRAIN/ollama-models/`, start it, and confirm with `ollama list`.
+
 ### 1.4 Configuration (environment variables, Phase 1)
 
 | Variable | Required | Default | Notes |
 |---|---|---|---|
 | `CURBIE_DATA_DIR` | Yes | — | Absolute path to the data dir on the USB drive. |
-| `CURBIE_MODEL` | No | `qwen3:4b` | Ollama model tag. |
+| `CURBIE_MODEL` | No | `qwen3:4b-instruct` | Ollama model tag. |
 | `OLLAMA_BASE_URL` | No | `http://127.0.0.1:11434` | |
 | `CURBIE_HTTP_HOST` | No | `127.0.0.1` | Loopback only in Phase 1. Phase 2 allows a LAN address (no auth, by decision; design §5.3). |
 | `CURBIE_HTTP_PORT` | No | `3000` | |
@@ -69,7 +128,8 @@ It covers the platform, Xcode Command Line Tools, Homebrew, Node (≥ 20.19, off
 ### 1.5 First run (Phase 1)
 
 ```bash
-ollama pull qwen3:4b
+scripts/ollama-service.sh start
+ollama pull qwen3:4b-instruct
 cd server && npm ci && npm run build
 CURBIE_DATA_DIR=/Volumes/<usb-drive>/curbie npm start
 ```

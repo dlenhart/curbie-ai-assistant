@@ -23,7 +23,7 @@ const CALCULATOR_TOOL = {
 };
 
 describe('OllamaModelAdapter', () => {
-  it('sends messages and tools in Ollama format and keeps the model loaded', async () => {
+  it('sends messages and tools in Ollama format, keeps the model loaded, and bounds context and output', async () => {
     const { fetchFunction, captured } = fakeFetch({ message: { role: 'assistant', content: 'hello' } });
     const adapter = new OllamaModelAdapter({ baseUrl: 'http://127.0.0.1:11434', modelName: 'qwen3:4b', fetchFunction });
 
@@ -43,6 +43,7 @@ describe('OllamaModelAdapter', () => {
       model: 'qwen3:4b',
       stream: false,
       keep_alive: -1,
+      options: { num_ctx: 8192, num_predict: 512 },
       messages: [
         { role: 'system', content: 'rules' },
         { role: 'user', content: 'hi' },

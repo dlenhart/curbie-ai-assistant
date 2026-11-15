@@ -4,10 +4,12 @@ set -euo pipefail
 readonly MINIMUM_NODE_VERSION="20.19.0"
 readonly RECOMMENDED_NODE_FORMULA="node@24"
 readonly OLLAMA_URL="${OLLAMA_BASE_URL:-http://127.0.0.1:11434}"
-readonly GENERAL_MODEL="${CURBIE_MODEL:-qwen3:4b}"
+readonly GENERAL_MODEL="${CURBIE_MODEL:-qwen3:4b-instruct}"
 readonly BASELINE_MODEL="qwen3:8b"
 readonly CODING_MODEL="qwen2.5-coder:7b"
 readonly DATA_DIRECTORY_MARKER=".curbie-data-dir"
+readonly OLLAMA_SERVICE_PLIST="$HOME/Library/LaunchAgents/com.curbie.ollama.plist"
+readonly OLLAMA_SERVICE_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ollama-service.sh"
 
 is_check_only=false
 is_dry_run=false
@@ -259,7 +261,16 @@ check_ollama() {
     return
   fi
   print_missing "Server not responding at $OLLAMA_URL."
-  if has_command brew && brew list --versions ollama >/dev/null 2>&1; then
+  if [[ -f "$OLLAMA_SERVICE_PLIST" ]]; then
+    if ask_yes_no "Start Curbie's Ollama service (models on the USB drive)?"; then
+      if would_only_preview "$OLLAMA_SERVICE_SCRIPT start"; then
+        record_result "Ollama" "would start"
+        return
+      fi
+      "$OLLAMA_SERVICE_SCRIPT" start || true
+    fi
+  elif has_command brew && brew list --versions ollama >/dev/null 2>&1; then
+    print_info "To keep models on the USB drive, set up Curbie's Ollama service instead (docs/installation.md §1.3a)."
     if ask_yes_no "Start Ollama as a background service (brew services, starts at login)?"; then
       if would_only_preview "brew services start ollama"; then
         record_result "Ollama" "would start"
@@ -277,6 +288,41 @@ check_ollama() {
     return
   fi
   record_result "Ollama" "NOT RUNNING"
+}
+
+read_service_models_directory() {
+  plutil -extract EnvironmentVariables.OLLAMA_MODELS raw -o - "$OLLAMA_SERVICE_PLIST" 2>/dev/null
+}
+
+check_model_storage() {
+  print_heading "Model storage"
+  print_info "Ollama's models (several GB each) belong on the USB drive, not the internal disk."
+  if [[ ! -f "$OLLAMA_SERVICE_PLIST" ]]; then
+    print_warning "No Curbie Ollama service at $OLLAMA_SERVICE_PLIST, so models go to ~/.ollama/models on the internal disk."
+    print_info "To move them to the USB drive, see docs/installation.md §1.3a."
+    record_result "Model storage" "warning: internal disk"
+    return
+  fi
+  local models_directory
+  models_directory="$(read_service_models_directory || true)"
+  if [[ -z "$models_directory" ]]; then
+    print_missing "$OLLAMA_SERVICE_PLIST doesn't set OLLAMA_MODELS."
+    record_result "Model storage" "NOT CONFIGURED"
+    return
+  fi
+  if [[ "$models_directory" != /Volumes/* ]]; then
+    print_warning "OLLAMA_MODELS is $models_directory, which is not under /Volumes, so it is probably on the internal disk."
+    record_result "Model storage" "warning: not on /Volumes"
+    return
+  fi
+  if [[ ! -d "$models_directory" ]]; then
+    print_missing "$models_directory not found. Is the USB drive mounted?"
+    record_result "Model storage" "DRIVE NOT MOUNTED"
+    return
+  fi
+  print_ok "Models stored in $models_directory ($(du -sh "$models_directory" 2>/dev/null | awk '{print $1}') used)"
+  print_info "Before ejecting the drive: scripts/ollama-service.sh stop"
+  record_result "Model storage" "ok (USB drive)"
 }
 
 is_model_present() {
@@ -469,8 +515,9 @@ main() {
   check_homebrew
   check_node
   check_ollama
+  check_model_storage
   check_model "$GENERAL_MODEL" "Curbie's main model (Phase 1)." true "2.5 GB"
-  check_model "$BASELINE_MODEL" "Baseline for the Phase 1 live comparison against 4B (design §7.1)." false "5 GB"
+  check_model "$BASELINE_MODEL" "Thinking-mode baseline from the Phase 1 model comparison (design §7.1)." false "5 GB"
   check_model "$CODING_MODEL" "Coding model, loaded on demand (later phase)." false "5 GB"
   check_data_directory
   check_sleep_setting

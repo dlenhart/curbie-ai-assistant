@@ -9,7 +9,7 @@ Curbie is an experiment in building a self-contained, partly offline AI assistan
 - **Policies live in code, not prompts.** A small model told "ask first" will eventually skip asking, so the harness enforces the rules itself.
 - **Local and private.** The model, data, and UI all run on one machine on the LAN. Nothing is exposed to the internet.
 
-> **Status:** Phase 1 (walking skeleton) is built and tested: chat over WebSocket, a calculator skill, the answer contract, and SQLite transcripts. The live go/no-go check against `qwen3:4b` and `qwen3:8b` on the M1 is the remaining step. Later phases are mapped in the [Phase 1 plan](docs/superpowers/plans/2026-10-01-curbie-phase-1-walking-skeleton.md#phase-map).
+> **Status:** Phase 1 (walking skeleton) is done: chat over WebSocket, a calculator skill, the answer contract, and SQLite transcripts. It passed the live go/no-go check on the M1 with `qwen3:4b-instruct` (replies in 4–12 s). Phase 2 (LAN access and settings) is being planned. Later phases are mapped in the [Phase 1 plan](docs/superpowers/plans/2026-10-01-curbie-phase-1-walking-skeleton.md#phase-map).
 
 ### Name inspiration
 
@@ -48,7 +48,7 @@ Browser ──WebSocket──▶ Chat gateway ──▶ Conversation orchestrato
 |---|---|
 | Backend | NestJS 11 (TypeScript), Node ≥ 20.19 (24 LTS on the host) |
 | Web UI | Handlebars templates and a small hand-written client script over WebSocket. No frontend framework. |
-| Model | Ollama running `qwen3:4b` by default (`qwen3:8b` as the comparison baseline) |
+| Model | Ollama running `qwen3:4b-instruct` by default |
 | Storage | SQLite via `better-sqlite3`, with versioned schema migrations |
 | Validation | ajv for tool arguments and structured answers |
 | Math | mathjs with dangerous functions disabled. Never `eval`. |
@@ -70,7 +70,7 @@ Or by hand:
 
 ```bash
 brew install node@24 ollama
-ollama pull qwen3:4b
+ollama pull qwen3:4b-instruct
 ```
 
 Ollama is optional on a development machine. Without it the server still starts, and chat replies show a "model isn't responding" error.
@@ -101,7 +101,7 @@ Then open <http://127.0.0.1:3000>.
 | Variable | Default | Notes |
 |---|---|---|
 | `CURBIE_DATA_DIR` | *(required)* | Absolute path to the data folder |
-| `CURBIE_MODEL` | `qwen3:4b` | Ollama model tag |
+| `CURBIE_MODEL` | `qwen3:4b-instruct` | Ollama model tag |
 | `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | |
 | `CURBIE_HTTP_HOST` | `127.0.0.1` | Loopback only in Phase 1. LAN binding arrives in Phase 2. |
 | `CURBIE_HTTP_PORT` | `3000` | |

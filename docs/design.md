@@ -298,7 +298,8 @@ Rules:
 ### 4.5 Model runtime
 - Ollama adapter behind a model port, so Qwen is swappable.
 - Qwen 2.5 / Qwen 3 class models are trained for function calling. The 7B–8B sizes are known to be reliable at choosing tools and filling arguments; 1.5B–3B models slip more often.
-- **Default: `qwen3:4b`** (owner's choice, 2026-10-02). About half the size and roughly twice the speed of 8B. The trade-off is reliability against the answer contract (§7.1, risk 1), which is settled by measurement: the Phase 1 live check compares 4B with an 8B baseline. Switching models is a config change (`CURBIE_MODEL`), not a code change.
+- **Default: `qwen3:4b-instruct`** (Qwen3-4B-Instruct-2507, decided 2026-11-15 from measurements on the M1, §7.1). It is a non-thinking model: it answers directly instead of writing a reasoning pass first. The original default, `qwen3:4b` (owner's choice, 2026-10-02), is a thinking model; it kept the answer contract but took 20–70 s per reply, because every model call wrote hundreds of reasoning tokens at about 20 tokens/s. Its `think: false` switch didn't help: Ollama serves it through a generic chat template, and the reasoning moved into the reply text instead of stopping. There is no non-thinking 8B. Switching models is a config change (`CURBIE_MODEL`), not a code change.
+- **Bounded context and output.** Every call sets `num_ctx` (8,192 tokens) and `num_predict` (512 tokens). Without `num_ctx`, Ollama's 4,096-token default overflowed during a runaway generation and Ollama silently discarded the oldest messages, including the system prompt that holds the answer contract. Without `num_predict`, a runaway only ended at the 180 s timeout. A finalize answer cut off at the limit is invalid JSON, so it takes the normal re-prompt and "don't know" path.
 - **Where the model runs:** on the M1, alongside Curbie. Using the 2013 Mac Pro as a remote model host was considered and dropped (§2).
 - **Keep the main model loaded.** Ollama unloads idle models after ~5 minutes by default, causing a reload delay on the next question. The main model is configured to stay loaded permanently (`keep_alive`). The coding model loads on demand.
 
@@ -601,6 +602,7 @@ ai-assistant/
 - **Startup ordering:** the launchd service must not start until the drive is mounted. The startup check above backs this up.
 - **Backups go somewhere other than the same USB drive.**
 - The Health dashboard (§4.20) shows drive status and free space.
+- **Ollama's models live on the same drive, beside the data dir, not inside it** (`ollama-models/` next to `curbie/`). They are re-downloadable, so they stay out of the data dir's backups. Ollama runs as its own LaunchAgent with `OLLAMA_MODELS` pointing there, and only while the drive is mounted (setup in `installation.md` §1.3a).
 
 **Why memory facts are not in the repo:** the facts file holds personal information about the owner and possibly household members. In git, "Forget that…" couldn't truly forget (the fact would persist in history), and pushing the repo to any remote would copy everyone's personal facts there. Facts live in the data dir and are backed up with the databases. The data dir is never committed.
 
@@ -642,14 +644,15 @@ Raised in a design review (2026-10-02). These are the assumptions everything els
 - Treat Phase 1's live verification on the M1 as a **go/no-go gate**, not a formality.
 - Measure, don't eyeball: run a fixed set of questions and record how often answers are accepted on the first try, how often they need the one re-prompt, and how often they fall back to "don't know." Turn traces (§4.12) hold this data.
 - LM Studio chats don't test this, because nothing checks the model's output there.
-- **Compare models with the same questions:** `qwen3:4b` and `qwen3:8b` (the baseline), both on the M1. Keep 4B as the default only if its numbers are close to 8B's.
+- **Compare models with the same questions:** planned as `qwen3:4b` against a `qwen3:8b` baseline. **Result (2026-11-15):** a scripted run of the three contract checks through the real orchestrator and Ollama adapter. `qwen3:4b` (thinking) kept the contract 9 of 9 across its three think settings, but took 20–70 s per reply, and once in the browser ran away past 3,500 tokens until the timeout. `qwen3:4b-instruct` kept it 9 of 9 at 3.6–9.4 s per reply, with quotes matching the calculator output exactly. In one run its tool-phase text claimed a wrong World Series winner, and the finalize step still answered "don't know": the contract caught it. The 8B was dropped from the comparison: it is a thinking model too and would be about twice as slow as 4B. Three questions are a smoke test, not a reliability measure; the Phase 8 eval harness is the real one.
 - If reliability is poor, likely levers: prompt and schema simplification, a different Qwen size or version, or relaxing a rule. Decide with data.
 
-**2. Latency (low risk, but measure).** The owner has run larger models on the M1 through LM Studio with a couple of seconds of delay, which is acceptable. Speed per call is not expected to be a problem. What differs in Curbie:
+**2. Latency (measured: real, and model-dependent).** The owner has run larger models on the M1 through LM Studio with a couple of seconds of delay, which is acceptable. Speed per call is not expected to be a problem. What differs in Curbie:
 - **Several sequential calls per answer:** gather with tools, then finalize (Phase 1), plus the checking pass (Phase 8).
 - **No streaming in Phase 1:** the structured answer is verified before display, so nothing appears until it passes.
 - **Longer prompts once retrieval arrives:** retrieved passages increase prompt-processing time before the first token.
 - Record time-to-reply in the Phase 1 live check, and again after the checking pass and retrieval are added.
+- **Measured 2026-11-15:** thinking models made this a real risk (20–70 s per reply with `qwen3:4b`). With `qwen3:4b-instruct`, a calculator answer takes about 8 s and a "don't know" about 4 s; the finalize JSON (about 5 s) is now the largest share. The first question after a load also waits on reading the model from the USB drive.
 
 **3. Retrieval quality over large knowledge bases.** The model never searches the 49 GB itself. The indexer builds the search index ahead of time, and each turn gives the model only the few best-matching passages. Collection size doesn't change the model's workload. It changes index build time and how hard it is to find the *right* passage among many near-matches.
 - **Develop and test against a subset first** (a "shim"): Simple English Wikipedia (1.0 GB), a topic collection (a few hundred MB), `top_nopic` (2.6 GB), or a script that extracts a chosen set of articles from the full ZIM. All go through the same ZIM reader and pipeline, so only the input changes.
@@ -660,7 +663,7 @@ Raised in a design review (2026-10-02). These are the assumptions everything els
 
 ## 8. Open Questions
 
-- Model confirmation: `qwen3:4b` is the default pending the Phase 1 comparison with `qwen3:8b`.
+- Model confirmation: `qwen3:4b-instruct` is the default (§4.5, §7.1), pending the browser live check.
 - Web search provider.
 - Weather API provider (AccuWeather or alternative), API key handling, and its actual rate limit (believed hourly, to be confirmed).
 - Persona file contents (tone, verbosity).

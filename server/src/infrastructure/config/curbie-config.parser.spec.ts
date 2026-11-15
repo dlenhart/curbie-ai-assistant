@@ -14,7 +14,7 @@ describe('parseConfig', () => {
       dataDirectory: '/Volumes/Curbie/data',
       skillsDirectory: '/repo/skills',
       ollamaBaseUrl: 'http://127.0.0.1:11434',
-      modelName: 'qwen3:4b',
+      modelName: 'qwen3:4b-instruct',
       httpHost: '127.0.0.1',
       httpPort: 3000,
       historyMessageLimit: 10,

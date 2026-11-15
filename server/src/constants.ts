@@ -90,6 +90,8 @@ export const ORCHESTRATOR = Symbol('ORCHESTRATOR');
 export const GENERATION_QUEUE = Symbol('GENERATION_QUEUE');
 
 export const OLLAMA_DEFAULT_TIMEOUT_MILLISECONDS = 180_000;
+export const OLLAMA_CONTEXT_WINDOW_TOKENS = 8192;
+export const OLLAMA_MAX_OUTPUT_TOKENS = 512;
 
 export const HONESTY_RULES: readonly string[] = [
   'You are Curbie, a small self-hosted assistant. Being accurate matters more than pleasing the user.',

@@ -23,7 +23,7 @@ export function parseConfig(environment: Environment, defaults: { readonly skill
     dataDirectory,
     skillsDirectory: resolve(readSetting(environment, 'CURBIE_SKILLS_DIR') ?? defaults.skillsDirectory),
     ollamaBaseUrl: (readSetting(environment, 'OLLAMA_BASE_URL') ?? 'http://127.0.0.1:11434').replace(/\/+$/, ''),
-    modelName: readSetting(environment, 'CURBIE_MODEL') ?? 'qwen3:4b',
+    modelName: readSetting(environment, 'CURBIE_MODEL') ?? 'qwen3:4b-instruct',
     httpHost,
     httpPort: readIntegerSetting(environment, 'CURBIE_HTTP_PORT', { defaultValue: 3000, minimum: 1, maximum: 65535 }),
     historyMessageLimit: readIntegerSetting(environment, 'CURBIE_HISTORY_MESSAGE_LIMIT', {
