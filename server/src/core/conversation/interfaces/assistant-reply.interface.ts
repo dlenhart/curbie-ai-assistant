@@ -1,4 +1,5 @@
 import type { Citation } from '../../answers/interfaces/citation.interface';
+import type { SourceCard } from '../../sources/interfaces/source-card.interface';
 import type { ReplyCategory } from '../types/reply-category.type';
 
 export interface AssistantReply {
@@ -6,4 +7,5 @@ export interface AssistantReply {
   readonly category: ReplyCategory;
   readonly text: string;
   readonly citations: readonly Citation[];
+  readonly cards: readonly SourceCard[];
 }

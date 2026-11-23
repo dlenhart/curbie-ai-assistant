@@ -1,0 +1,40 @@
+<form class="settings-form" method="post" action="/manage/recipes/{{recipeId}}/save">
+  <div class="chat__window">
+    <div class="panel">
+      <a class="panel__back" href="/manage/recipes">◂ RECIPES</a>
+      <h2 class="panel__heading">{{title}}</h2>
+      <div class="recipe-photos">
+        {{#each pageImages}}<a href="{{href}}"><img src="{{href}}" alt="{{label}}"></a>{{/each}}
+      </div>
+      <h2 class="panel__heading">OCR</h2>
+      <ol class="recipe-ocr">
+        {{#each ocrLines}}<li{{#if isLowConfidence}} class="is-low-confidence"{{/if}}>{{#if isLowConfidence}}▲ {{/if}}{{text}}</li>{{/each}}
+      </ol>
+      {{#if problems.length}}
+      <h2 class="panel__heading">PROBLEMS</h2>
+      <ul class="recipe-list recipe-problems">
+        {{#each problems}}<li>{{this}}</li>{{/each}}
+      </ul>
+      {{/if}}
+      {{#if warnings.length}}
+      <h2 class="panel__heading">WARNINGS</h2>
+      <ul class="recipe-list">
+        {{#each warnings}}<li>{{this}}</li>{{/each}}
+      </ul>
+      {{/if}}
+      <h2 class="panel__heading">{{#if hasPendingEdit}}DRAFT · UNAPPROVED EDIT{{else}}DRAFT{{/if}}</h2>
+      <textarea name="markdown" class="neon-input recipe-editor" aria-label="Recipe text">{{draftMarkdown}}</textarea>
+    </div>
+  </div>
+  <div class="form-actions recipe-actions">
+    {{#if statusMessage}}<p class="chat__status" role="status">{{statusMessage}}</p>{{/if}}
+    <button type="submit" class="neon-button" formaction="/manage/recipes/{{recipeId}}/save">SAVE</button>
+    <button type="submit" class="neon-button" formaction="/manage/recipes/{{recipeId}}/approve">APPROVE</button>
+    {{#if isApproved}}
+    <button type="submit" class="neon-button" formaction="/manage/recipes/{{recipeId}}/discard-edit">DISCARD EDIT</button>
+    <button type="submit" class="neon-button" formaction="/manage/recipes/{{recipeId}}/delete">DELETE RECIPE</button>
+    {{else}}
+    <button type="submit" class="neon-button" formaction="/manage/recipes/{{recipeId}}/discard">DISCARD</button>
+    {{/if}}
+  </div>
+</form>

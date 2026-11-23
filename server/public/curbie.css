@@ -127,6 +127,25 @@ body::before {
 
 .chat__sources li { padding-left: 20px; position: relative; }
 .chat__sources li::before { content: '▸'; position: absolute; left: 0; color: var(--neon-cyan); }
+.chat__sources a { color: var(--neon-cyan); }
+
+.chat__card {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--neon-cyan);
+  box-shadow: 0 0 8px rgba(0, 255, 255, 0.25);
+}
+
+.chat__card-heading {
+  display: inline-block;
+  margin-bottom: 6px;
+  color: var(--neon-cyan);
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-shadow: 0 0 6px var(--neon-cyan);
+}
+
+.chat__card-body { white-space: pre-wrap; font: inherit; margin: 0; }
 
 .chat__status {
   min-height: 1.5em;
@@ -619,3 +638,54 @@ a.tile:focus-visible {
   color: var(--muted-text);
   font-size: 0.85rem;
 }
+
+.chat__notice {
+  display: block;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  color: var(--neon-yellow);
+  background: var(--dark-gray);
+  border: 2px solid var(--neon-yellow);
+  border-radius: 5px;
+  text-decoration: none;
+  font-size: 0.85rem;
+  letter-spacing: 1px;
+}
+
+.chat__notice:hover,
+.chat__notice:focus-visible { outline: none; box-shadow: 0 0 10px rgba(255, 255, 0, 0.4); }
+
+.recipe-scan { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 8px; }
+.recipe-scan .chat__status { margin: 0; }
+
+.recipe-list { list-style: none; margin-bottom: 8px; }
+.recipe-list li { padding: 4px 0; }
+.recipe-list a { color: var(--neon-cyan); text-decoration: none; }
+.recipe-list a:hover,
+.recipe-list a:focus-visible { outline: none; text-shadow: 0 0 8px var(--neon-cyan); }
+.recipe-problems li { color: var(--neon-yellow); }
+#recipe-filter { margin-bottom: 8px; }
+
+.recipe-tag {
+  margin-left: 6px;
+  color: var(--neon-magenta);
+  font-size: 0.75rem;
+  letter-spacing: 1px;
+}
+
+.recipe-photos { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.recipe-photos a { flex: 1 1 200px; }
+.recipe-photos img { display: block; max-width: 100%; border: 2px solid rgba(0, 255, 255, 0.5); border-radius: 5px; }
+
+.recipe-ocr { padding-left: 2.5em; margin-bottom: 8px; color: var(--muted-text); font-size: 0.85rem; }
+.recipe-ocr .is-low-confidence { color: var(--neon-yellow); }
+
+.recipe-editor {
+  min-height: 24rem;
+  font-family: 'Courier New', monospace;
+  resize: vertical;
+}
+
+.recipe-actions { flex-wrap: wrap; gap: 8px; }
+
+.recipe-text { white-space: pre-wrap; font: inherit; }

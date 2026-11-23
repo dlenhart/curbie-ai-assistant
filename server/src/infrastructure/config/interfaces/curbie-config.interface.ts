@@ -7,4 +7,5 @@ export interface CurbieConfig {
   readonly httpPort: number;
   readonly historyMessageLimit: number;
   readonly maxToolRounds: number;
+  readonly ocrBinaryPath: string;
 }

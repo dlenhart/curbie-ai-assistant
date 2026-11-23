@@ -10,7 +10,9 @@ Phase 1 (walking skeleton) is done: all 12 plan tasks, 152 tests in 20 suites, c
 
 **Phase 2 is committed on `main` and passed its manual check (2026-11-23).** Plan: `docs/superpowers/plans/2026-11-15-curbie-phase-2-lan-settings-frame.md`. Plain HTTP by IP (TLS deferred), opt-in LAN binding (`CURBIE_HTTP_HOST=0.0.0.0`), a Host/Origin guard, the shared page frame and nav, the Manage hub, a Settings page (model, time zone, units in SQLite), and a `clock` skill (design §4.13, §4.17, §5.3).
 
-**Phase 2 follow-ups are built, uncommitted, on branch `phase-2-followups` (2026-11-23).** 270 tests in 33 suites. Model loading is now a separate step with its own timeout, and a model saved in Settings starts loading in the background. Also: a 3 s installed-models check, a hardened Origin guard, failed saves that keep valid fields, and the turn's settings passed to skills (design §4.5, §4.13, §4.17, §5.3, §5.7).
+**Phase 2 follow-ups are committed on `main` (`1a6904d`).** Model loading is a separate step, plus the hardened Origin guard and the other review fixes (design §4.5, §4.13, §4.17, §5.3, §5.7).
+
+**Phase 3 (recipes) is built on branch `phase-3-recipes`, uncommitted (2026-11-23).** 543 tests in 54 suites. Phone photos dropped in `<data dir>/inbox/` are read by a Swift Vision helper, labelled by the model, assembled by code into a Markdown draft, then reviewed and approved on Manage › Recipes; chat answers with a code-built recipe card. Manuals and the device catalog are deferred. The owner's manual check is pending. Spec: `docs/superpowers/specs/2026-11-23-curbie-phase-3-recipes-design.md`; plan: `docs/superpowers/plans/2026-11-23-curbie-phase-3-recipes.md` (design §4.3.1a). Build the OCR helper with `scripts/build-ocr.sh` (`installation.md` §1.5b).
 
 **Next session:** follow `docs/next-session.md`. The `hbs` advisory is accepted on one condition: render locals come only from server-side values, never from request data (design §5.7).
 
@@ -23,15 +25,17 @@ Run from `server/`:
 - `npm ci`: install exact pinned dependencies.
 - `npm test`: the full Jest suite, including the architecture rules and the end-to-end integration test (no Ollama needed; the model is scripted).
 - `npm run typecheck`, then `npm run build` (output in `dist/`).
+- `bash .claude/skills/curbie-check/check.sh` (or `/curbie-check` in Claude Code): tests, typecheck, build, and a boot smoke test in one summary. `/curbie-wrap` does the end-of-session docs. Both live in `.claude/skills/` (Claude Code skills for developers, not Curbie's own `skills/`).
 - `CURBIE_DATA_DIR=/Volumes/CURBIE_BRAIN/curbie npm start`: run the server at `http://127.0.0.1:3000`. The data folder must already contain an empty `.curbie-data-dir` marker file, or startup refuses. Other settings are in `docs/installation.md`.
 
 ### Layout
 
-- `server/src/core/`: pure domain logic (answers, conversation, model port, skills, sources, shared), plus `core/testing/` test doubles.
-- `server/src/adapters/`: model (Ollama), persistence (SQLite), skills (calculator, skill loader), system (clock, IDs), web (gateway, controller, app configurator).
+- `server/src/core/`: pure domain logic (answers, conversation, model port, recipes, skills, sources, shared), plus `core/testing/` test doubles.
+- `server/src/adapters/`: model (Ollama), persistence (SQLite), skills (calculator, skill loader), system (clock, IDs), web (gateway, controller, app configurator), ocr (the only `child_process` importer), files (data-dir path guard and recipe file store).
 - `server/src/infrastructure/config/`: environment parsing.
 - `server/src/app.module.ts` is the composition root; `server/src/main.ts` boots the server.
 - `server/views/` (Handlebars: `layout.hbs` is the shared frame with the nav; each page renders inside it) and `server/public/` (`curbie.css`, copied from the mockups, plus client JS); `skills/` at the repo root holds skill documents.
+- `ocr/`: the Swift Apple Vision helper source; `ocr/bin/` is built by `scripts/build-ocr.sh` and gitignored.
 - `diagnostics/`: scripts that run the built server code against a real Ollama. `model-contract.diagnostic.js` asks the Phase 1 contract questions and logs every model call's timing and tokens (`--help` for usage). It needs a running Ollama and `npm run build` first. It's the seed of Phase 8's eval harness.
 
 ## Source of truth

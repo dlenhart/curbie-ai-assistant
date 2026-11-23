@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,6 +7,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import WebSocket from 'ws';
+import { ScriptedOcrInvoker } from './adapters/ocr/testing/scripted-ocr.invoker';
 import { DataDirectoryUnavailableError } from './adapters/persistence/errors/data-directory-unavailable.error';
 import { configureApp } from './adapters/web/app.configurator';
 import { AppModule } from './app.module';
@@ -17,8 +18,14 @@ import {
   MODEL,
   MODEL_CATALOG,
   MODEL_LOADER,
+  OCR,
+  RECIPE_PAGE_MESSAGES,
+  RECIPE_PROBLEM_MESSAGES,
+  RECIPE_SCANNER,
   SETTINGS_REPOSITORY,
 } from './constants';
+import type { RecognizedLine } from './core/recipes/interfaces/recognized-line.interface';
+import type { RecipeInboxScanner } from './core/recipes/recipe-inbox.scanner';
 import type { SettingsRepository } from './core/settings/interfaces/settings-repository.interface';
 import { ModelUnavailableError } from './core/model/errors/model-unavailable.error';
 import type { ModelResponse } from './core/model/interfaces/model-response.interface';
@@ -38,6 +45,7 @@ describe('Curbie app (integration)', () => {
   let serverAddress: string;
   let modelCatalog: FakeModelCatalog;
   let modelLoader: RecordingModelLoader;
+  let ocrResponses: Map<string, readonly RecognizedLine[] | Error>;
 
   function testingModule(directory: string) {
     return Test.createTestingModule({ imports: [AppModule] })
@@ -45,7 +53,7 @@ describe('Curbie app (integration)', () => {
       .useValue(
         parseConfig(
           { CURBIE_DATA_DIR: directory, CURBIE_SKILLS_DIR: REPOSITORY_SKILLS_DIRECTORY },
-          { skillsDirectory: REPOSITORY_SKILLS_DIRECTORY },
+          { skillsDirectory: REPOSITORY_SKILLS_DIRECTORY, ocrBinaryPath: '/nonexistent/curbie-ocr' },
         ),
       )
       .overrideProvider(MODEL)
@@ -55,7 +63,9 @@ describe('Curbie app (integration)', () => {
       .overrideProvider(MODEL_CATALOG)
       .useValue(modelCatalog)
       .overrideProvider(MODEL_LOADER)
-      .useValue(modelLoader);
+      .useValue(modelLoader)
+      .overrideProvider(OCR)
+      .useValue(new ScriptedOcrInvoker(ocrResponses));
   }
 
   async function startApp(
@@ -89,6 +99,7 @@ describe('Curbie app (integration)', () => {
   beforeEach(() => {
     dataDirectory = mkdtempSync(join(tmpdir(), 'curbie-it-'));
     writeFileSync(join(dataDirectory, DATA_DIRECTORY_MARKER), '');
+    ocrResponses = new Map();
   });
 
   afterEach(async () => {
@@ -139,6 +150,7 @@ describe('Curbie app (integration)', () => {
         category: 'cited',
         text: '15% of 340 is 51.',
         citations: [{ sourceId: 'src_1', title: 'Calculator', skillName: 'calculator' }],
+        cards: [],
       },
     });
     const toolMessage = model.receivedRequests[1].messages.find((message) => message.role === 'tool');
@@ -352,6 +364,316 @@ describe('Curbie app (integration)', () => {
       expect(failed.status).toBe(400);
       expect(failed.text).toContain('Choose imperial or metric.');
       expect(failed.text).not.toContain('curbie-server');
+    });
+  });
+
+  describe('Recipes pages', () => {
+    const SHEET_CAKE_LABELS = { title: [1], servings: 2, headings: [], ingredients: [3, 4], steps: [6, 7] };
+    const CLEAN_MARKDOWN = [
+      '# Sheet Cake',
+      'Serves: 12',
+      '',
+      '## Ingredients',
+      '- 2 cups flour',
+      '- 1 cup sugar',
+      '',
+      '## Steps',
+      '1. Mix everything.',
+      '2. Bake 30 minutes.',
+      '',
+    ].join('\n');
+
+    async function startWithScannedSheetCake(chatResponses: readonly ModelResponse[] = []): Promise<void> {
+      ocrResponses.set('cake-1.jpg', [
+        { text: 'Sheet Cake', confidence: 0.98 },
+        { text: 'Serves 12', confidence: 0.95 },
+        { text: '2 cups flour', confidence: 0.9 },
+        { text: '1 cup sugar', confidence: 0.3 },
+        { text: 'Grandma', confidence: 0.9 },
+      ]);
+      ocrResponses.set('cake-2.jpg', [
+        { text: 'Mix everything.', confidence: 0.9 },
+        { text: 'Bake 30 minutes.', confidence: 0.9 },
+      ]);
+      mkdirSync(join(dataDirectory, 'inbox'), { recursive: true });
+      writeFileSync(join(dataDirectory, 'inbox', 'cake-1.jpg'), 'first page');
+      writeFileSync(join(dataDirectory, 'inbox', 'cake-2.jpg'), 'second page');
+      await startApp([answerResponse(SHEET_CAKE_LABELS), ...chatResponses]);
+      const start = app!.get<RecipeInboxScanner>(RECIPE_SCANNER).start();
+      if (start.kind !== 'started') throw new Error('The scan did not start.');
+      await start.completion;
+    }
+
+    function post(path: string) {
+      return request(app!.getHttpServer()).post(path).type('form');
+    }
+
+    function get(path: string) {
+      return request(app!.getHttpServer()).get(path);
+    }
+
+    it('the chat page shows the review notice, and the Manage tile shows 1 need review', async () => {
+      await startWithScannedSheetCake();
+      const chat = await get('/');
+      expect(chat.text).toContain('class="chat__notice" href="/manage/recipes"');
+      expect(chat.text).toContain('▲ 1 new recipe ready to review');
+      const manage = await get('/manage');
+      expect(manage.text).toContain('href="/manage/recipes"');
+      expect(manage.text).toContain('0 <small class="tile__unit">recipes</small>');
+      expect(manage.text).toContain('▲ 1 need review');
+      expect(manage.text.indexOf('RECIPES')).toBeLessThan(manage.text.indexOf('SETTINGS'));
+    });
+
+    it('the review page shows the draft, the OCR lines with a low-confidence mark, and Line N: Move or delete every line under Unsorted.', async () => {
+      await startWithScannedSheetCake();
+      const list = await get('/manage/recipes');
+      expect(list.status).toBe(200);
+      expect(list.text).toContain('href="/manage/recipes/recipe_1"');
+      const review = await get('/manage/recipes/recipe_1');
+      expect(review.status).toBe(200);
+      expect(review.text).toContain('name="markdown"');
+      expect(review.text).toContain('# Sheet Cake');
+      expect(review.text).toContain('## Unsorted\nServes 12\nGrandma');
+      expect(review.text).toMatch(/class="is-low-confidence">▲ 1 cup sugar</);
+      expect(review.text).toMatch(new RegExp(`Line \\d+: ${RECIPE_PROBLEM_MESSAGES.unsortedPresent.replace('.', '\\.')}`));
+      expect(review.text).toContain('href="/recipes/recipe_1/pages/2"');
+    });
+
+    it('approve is refused while Unsorted exists, and the draft is kept', async () => {
+      await startWithScannedSheetCake();
+      const draft = `${CLEAN_MARKDOWN}\n## Unsorted\nGrandma's note\n`;
+      const response = await post('/manage/recipes/recipe_1/approve').send({ markdown: draft });
+      expect(response.status).toBe(303);
+      expect(response.headers.location).toBe('/manage/recipes/recipe_1?status=notApproved');
+      const review = await get(response.headers.location);
+      expect(review.text).toContain(RECIPE_PAGE_MESSAGES.notApproved);
+      expect(review.text).toContain('Grandma&#x27;s note');
+      expect((await get('/recipes/recipe_1')).status).toBe(404);
+    });
+
+    it('save then approve a clean draft redirects to the list; the notice is gone; GET /recipes/:id shows the recipe; the page image is served as image/jpeg', async () => {
+      await startWithScannedSheetCake();
+      const saved = await post('/manage/recipes/recipe_1/save').send({ markdown: CLEAN_MARKDOWN });
+      expect(saved.status).toBe(303);
+      expect(saved.headers.location).toBe('/manage/recipes/recipe_1?status=saved');
+      expect((await get(saved.headers.location)).text).toContain(RECIPE_PAGE_MESSAGES.saved);
+
+      const approved = await post('/manage/recipes/recipe_1/approve').send({ markdown: CLEAN_MARKDOWN });
+      expect(approved.status).toBe(303);
+      expect(approved.headers.location).toBe('/manage/recipes?status=approved');
+      expect((await get(approved.headers.location)).text).toContain(RECIPE_PAGE_MESSAGES.approved);
+
+      expect((await get('/')).text).not.toContain('chat__notice');
+      const view = await get('/recipes/recipe_1');
+      expect(view.status).toBe(200);
+      expect(view.text).toContain('<pre class="recipe-text"># Sheet Cake');
+      expect(view.text).toContain('href="/" aria-current="page">CHAT</a>');
+      const image = await get('/recipes/recipe_1/pages/1');
+      expect(image.status).toBe(200);
+      expect(image.headers['content-type']).toContain('image/jpeg');
+      expect((await get('/recipes/recipe_1/pages/3')).status).toBe(404);
+    });
+
+    it('chat about an approved recipe returns a reply with the card built from the approved Markdown', async () => {
+      const texasSheetCake = [
+        '# Texas Sheet Cake',
+        'Serves: 24',
+        '',
+        '## Ingredients',
+        '- 2 cups flour',
+        '- 1 T cocoa',
+        '',
+        '## Steps',
+        '1. Bake at 350.',
+        '',
+      ].join('\n');
+      await startWithScannedSheetCake([
+        toolCallResponse('search_recipes', { query: 'Texas sheet cake' }),
+        toolCallResponse('get_recipe', { recipe_id: 'recipe_1' }),
+        textResponse(''),
+        answerResponse({ category: 'cited', text: "Here's the Texas sheet cake.", sourceIds: ['src_2'], quotes: [] }),
+      ]);
+      expect((await post('/manage/recipes/recipe_1/approve').send({ markdown: texasSheetCake })).status).toBe(303);
+
+      const reply = await sendOverWebSocket({
+        event: 'user_message',
+        data: { conversationId: 'conv_test', text: "What's the recipe for our Texas sheet cake?" },
+      });
+
+      expect(reply.event).toBe('assistant_reply');
+      const data = reply.data as {
+        text: string;
+        cards: Array<{ heading: string; body: string; href: string }>;
+        citations: Array<{ href?: string }>;
+      };
+      expect(data.text).toBe("Here's the Texas sheet cake.");
+      expect(data.cards[0].body).toBe(texasSheetCake);
+      expect(data.cards[0].body).toContain('1 T cocoa');
+      expect(data.cards[0].heading).toBe('Texas Sheet Cake');
+      expect(data.cards[0].href).toBe('/recipes/recipe_1');
+      expect(data.citations[0].href).toBe('/recipes/recipe_1');
+      const searchMessage = model.receivedRequests[2].messages.find((message) => message.role === 'tool');
+      expect(searchMessage?.content).toContain('recipe_1 | Texas Sheet Cake');
+    });
+
+    it('POST with markdown as an array, or over the length limit, answers 400, renders the stored draft, and saves nothing', async () => {
+      await startWithScannedSheetCake();
+      const asArray = await post('/manage/recipes/recipe_1/save').send('markdown=%23%20Injected&markdown=second');
+      expect(asArray.status).toBe(400);
+      expect(asArray.text).toContain(RECIPE_PAGE_MESSAGES.invalidMarkdown);
+      expect(asArray.text).toContain('## Unsorted\nServes 12\nGrandma');
+      expect(asArray.text).not.toContain('Injected');
+
+      const tooLong = await post('/manage/recipes/recipe_1/approve').send({ markdown: `# Long${'x'.repeat(20_000)}` });
+      expect(tooLong.status).toBe(400);
+      expect(tooLong.text).toContain(RECIPE_PAGE_MESSAGES.invalidMarkdown);
+      expect(tooLong.text).not.toContain('# Long');
+
+      const missing = await post('/manage/recipes/recipe_1/save').send({});
+      expect(missing.status).toBe(400);
+
+      const review = await get('/manage/recipes/recipe_1');
+      expect(review.text).toContain('## Unsorted\nServes 12\nGrandma');
+      expect(review.text).not.toContain('Injected');
+    });
+
+    it('POST with extra keys (layout, settings) saves normally', async () => {
+      await startWithScannedSheetCake();
+      const response = await post('/manage/recipes/recipe_1/save').send({
+        markdown: CLEAN_MARKDOWN,
+        layout: '../../package.json',
+        settings: 'x',
+      });
+      expect(response.status).toBe(303);
+      const review = await get('/manage/recipes/recipe_1');
+      expect(review.text).not.toContain('## Unsorted');
+      expect(review.text).not.toContain('curbie-server');
+    });
+
+    it('unknown or malformed ids answer 404; GET /recipes/:id for a draft answers 404', async () => {
+      await startWithScannedSheetCake();
+      expect((await get('/manage/recipes/recipe_99')).status).toBe(404);
+      expect((await get('/manage/recipes/recipe_1..x')).status).toBe(404);
+      expect((await get('/manage/recipes/notarecipe')).status).toBe(404);
+      expect((await post('/manage/recipes/recipe_99/save').send({ markdown: CLEAN_MARKDOWN })).status).toBe(404);
+      expect((await post('/manage/recipes/bad!id/approve').send({ markdown: CLEAN_MARKDOWN })).status).toBe(404);
+      expect((await get('/recipes/recipe_1')).status).toBe(404);
+      expect((await get('/recipes/recipe_99/pages/1')).status).toBe(404);
+      expect((await get('/recipes/recipe_1/pages/abc')).status).toBe(404);
+    });
+
+    it('wrong-state actions answer 409 with a fixed message', async () => {
+      await startWithScannedSheetCake();
+      const discardEdit = await post('/manage/recipes/recipe_1/discard-edit').send({});
+      expect(discardEdit.status).toBe(409);
+      expect(discardEdit.text).toBe(RECIPE_PAGE_MESSAGES.wrongState);
+      expect((await post('/manage/recipes/recipe_1/delete').send({})).status).toBe(409);
+
+      await post('/manage/recipes/recipe_1/approve').send({ markdown: CLEAN_MARKDOWN });
+      expect((await post('/manage/recipes/recipe_1/discard').send({})).status).toBe(409);
+    });
+
+    it('discard edit resets an approved draft, and delete removes the approved recipe', async () => {
+      await startWithScannedSheetCake();
+      await post('/manage/recipes/recipe_1/approve').send({ markdown: CLEAN_MARKDOWN });
+      await post('/manage/recipes/recipe_1/save').send({ markdown: `${CLEAN_MARKDOWN}\n## Notes\n- Edited\n` });
+      expect((await get('/manage/recipes')).text).toContain('edited');
+
+      const discardEdit = await post('/manage/recipes/recipe_1/discard-edit').send({});
+      expect(discardEdit.status).toBe(303);
+      expect(discardEdit.headers.location).toBe('/manage/recipes/recipe_1');
+      expect((await get('/manage/recipes/recipe_1')).text).not.toContain('Edited');
+
+      const deleted = await post('/manage/recipes/recipe_1/delete').send({});
+      expect(deleted.status).toBe(303);
+      expect(deleted.headers.location).toBe('/manage/recipes');
+      expect((await get('/recipes/recipe_1')).status).toBe(404);
+      expect(existsSync(join(dataDirectory, 'discarded', 'recipe_1', 'page-1.jpg'))).toBe(true);
+    });
+
+    it('saving a new title on an approved recipe keeps the approved title everywhere until re-approved; discard edit keeps it', async () => {
+      await startWithScannedSheetCake([
+        toolCallResponse('get_recipe', { recipe_id: 'recipe_1' }),
+        textResponse(''),
+        answerResponse({ category: 'cited', text: "Here's the sheet cake.", sourceIds: ['src_1'], quotes: [] }),
+      ]);
+      await post('/manage/recipes/recipe_1/approve').send({ markdown: CLEAN_MARKDOWN });
+      const renamed = CLEAN_MARKDOWN.replace('# Sheet Cake', '# Chocolate Sheet Cake');
+      expect((await post('/manage/recipes/recipe_1/save').send({ markdown: renamed })).status).toBe(303);
+
+      const list = await get('/manage/recipes');
+      expect(list.text).toContain('Sheet Cake');
+      expect(list.text).not.toContain('Chocolate');
+      expect((await get('/recipes/recipe_1')).text).toContain('<h2 class="panel__heading">Sheet Cake</h2>');
+      const reply = await sendOverWebSocket({
+        event: 'user_message',
+        data: { conversationId: 'conv_test', text: 'Show me the sheet cake.' },
+      });
+      expect((reply.data as { cards: Array<{ heading: string }> }).cards[0].heading).toBe('Sheet Cake');
+
+      await post('/manage/recipes/recipe_1/discard-edit').send({});
+      expect((await get('/manage/recipes/recipe_1')).text).toContain('<h2 class="panel__heading">Sheet Cake</h2>');
+      expect((await get('/manage/recipes')).text).not.toContain('Chocolate');
+    });
+
+    it('the review page loads the script that confirms DISCARD and DELETE RECIPE', async () => {
+      await startWithScannedSheetCake();
+      const review = await get('/manage/recipes/recipe_1');
+      expect(review.text).toContain('<script src="/static/recipe-review.js"></script>');
+      const script = await get('/static/recipe-review.js');
+      expect(script.status).toBe(200);
+      expect(script.text).toContain('confirm(');
+    });
+
+    it('a cross-origin POST to approve is refused with 403', async () => {
+      await startWithScannedSheetCake();
+      const response = await post('/manage/recipes/recipe_1/approve')
+        .set('Origin', 'http://evil.example')
+        .send({ markdown: CLEAN_MARKDOWN });
+      expect(response.status).toBe(403);
+      expect((await get('/recipes/recipe_1')).status).toBe(404);
+    });
+
+    it('discard moves the photos to discarded/ and the recipe disappears', async () => {
+      await startWithScannedSheetCake();
+      const response = await post('/manage/recipes/recipe_1/discard').send({});
+      expect(response.status).toBe(303);
+      expect(response.headers.location).toBe('/manage/recipes');
+      expect(existsSync(join(dataDirectory, 'discarded', 'recipe_1', 'page-1.jpg'))).toBe(true);
+      expect(existsSync(join(dataDirectory, 'discarded', 'recipe_1', 'page-2.display.jpg'))).toBe(true);
+      expect((await get('/manage/recipes/recipe_1')).status).toBe(404);
+      expect((await get('/manage/recipes')).text).not.toContain('recipe_1');
+    });
+
+    it('POST /manage/recipes/scan redirects with scanStarted', async () => {
+      await startApp([]);
+      const response = await post('/manage/recipes/scan').send({});
+      expect(response.status).toBe(303);
+      expect(response.headers.location).toBe('/manage/recipes?status=scanStarted');
+      const list = await get('/manage/recipes?status=scanStarted');
+      expect(list.text).toContain(RECIPE_PAGE_MESSAGES.scanStarted);
+      expect(list.text).toContain('SCAN INBOX');
+      expect(list.text).toContain('id="recipe-filter"');
+      expect(list.text.match(/<script src="\/static\/recipes\.js"><\/script>/g)).toHaveLength(1);
+      expect(list.text.indexOf('<script src="/static/recipes.js">')).toBeGreaterThan(list.text.indexOf('</main>'));
+    });
+
+    it('the chat notice counts scan problems neutrally', async () => {
+      mkdirSync(join(dataDirectory, 'inbox'), { recursive: true });
+      writeFileSync(join(dataDirectory, 'inbox', 'notes.txt'), 'not a photo');
+      await startApp([]);
+      const start = app!.get<RecipeInboxScanner>(RECIPE_SCANNER).start();
+      if (start.kind !== 'started') throw new Error('The scan did not start.');
+      await start.completion;
+      expect((await get('/')).text).toContain('▲ 1 scan problem → MANAGE');
+    });
+
+    it('ignores an unknown status flag', async () => {
+      await startApp([]);
+      const list = await get('/manage/recipes?status=%3Cscript%3E');
+      expect(list.status).toBe(200);
+      expect(list.text).not.toContain('script%3E');
+      expect(list.text).not.toContain('&lt;script');
     });
   });
 

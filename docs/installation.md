@@ -38,7 +38,7 @@ It covers the platform, Xcode Command Line Tools, Homebrew, Node (≥ 20.19, off
 | Embedding model | `ollama pull <model>` | Model *TBD* (§8). `nomic-embed-text` is a common small option; not yet decided. |
 | mkcert | `brew install mkcert` (plus `nss` if Firefox is used) | Local HTTPS (§5.3). Run `mkcert -install`, then install the root CA on every client device. |
 | ZIM reader library | `npm install @openzim/libzim` (in `server/`) | Project dependency for the knowledge indexer, not a system install. |
-| OCR helper | Built from `ocr/` with `swiftc` | Swift CLI wrapping Apple Vision (§3). Spawned on demand during ingestion. |
+| OCR helper | `scripts/build-ocr.sh` (needs Xcode's `swiftc`) | Swift CLI wrapping Apple Vision. Needed since Phase 3 for recipes; see §1.5b. |
 
 ### 1.3 Hardware and macOS setup
 
@@ -124,6 +124,7 @@ How it behaves:
 | `CURBIE_SKILLS_DIR` | No | repo `skills/` | |
 | `CURBIE_HISTORY_MESSAGE_LIMIT` | No | `10` | 0–100. |
 | `CURBIE_MAX_TOOL_ROUNDS` | No | `4` | 1–10. |
+| `CURBIE_OCR_BINARY` | No | `ocr/bin/curbie-ocr` | Path to the built OCR helper (§1.5b). If it is missing the server still starts, and recipe scans report that the helper isn't built. |
 
 ### 1.5 First run (Phase 1)
 
@@ -147,6 +148,16 @@ Curbie is served over plain HTTP and reached by IP address (design §5.3).
 5. On a phone or laptop on the same network, open `http://<ip>:3000`.
 
 Open the page by IP, `localhost`, or `127.0.0.1`. Curbie refuses requests addressed to a hostname (a DNS rebinding defense), and refuses form posts and chat connections from other sites' pages (design §5.3).
+
+### 1.5b Recipes: the OCR helper and the inbox (Phase 3)
+
+1. **Build the OCR helper** once, and again after changing `ocr/curbie-ocr.swift`: run `scripts/build-ocr.sh` from the repo root. It needs `swiftc` (Xcode or the Command Line Tools) and produces `ocr/bin/curbie-ocr`, which is gitignored. `CURBIE_OCR_BINARY` overrides the location.
+2. **The inbox folder** is `<data dir>/inbox/` (`/Volumes/CURBIE_BRAIN/curbie/inbox/`). Curbie creates it at startup. Copy phone photos into it, then restart Curbie or press SCAN INBOX on Manage › Recipes.
+   - Accepted: `.heic`, `.heif`, `.jpg`, `.jpeg`, `.png` (any case). Other files are reported as unsupported and left alone.
+   - One photo per recipe: `texas-sheet-cake.heic`.
+   - Several pages of one recipe: `texas-sheet-cake-1.heic`, `texas-sheet-cake-2.heic`. Only a trailing `-1` to `-9` counts as a page number, so `grandmas-cake-1950.heic` is a single-photo recipe.
+   - A group with bad numbering (`pie-2.heic` with no `-1`, a duplicate number, a gap, or the same name used bare and numbered) stays in the inbox and is listed with the reason. Rename the files and scan again.
+   - Imported photos move to `<data dir>/originals/recipes/<id>/`. Discarded recipes' photos move to `<data dir>/discarded/<id>/`. Photos are never deleted.
 
 ### 1.6 Accounts and API keys (later phases)
 

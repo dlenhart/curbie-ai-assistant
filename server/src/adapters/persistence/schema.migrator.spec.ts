@@ -47,4 +47,17 @@ describe('runMigrations', () => {
     expect(tables).toEqual([{ name: 'good' }, { name: 'schema_migrations' }]);
     expect(database.prepare('SELECT version FROM schema_migrations').all()).toEqual([{ version: 1 }]);
   });
+
+  it('migration 3 applies on top of a migration-2 database', () => {
+    const database = new Database(':memory:');
+    runMigrations(
+      database,
+      MIGRATIONS.filter((migration) => migration.version <= 2),
+    );
+    expect(runMigrations(database)).toEqual([3]);
+    const tables = database.prepare("SELECT name FROM sqlite_master WHERE name LIKE 'recipe%' ORDER BY name").all();
+    expect(tables.map((table) => (table as { name: string }).name)).toEqual(
+      expect.arrayContaining(['recipe_pages', 'recipe_scan_reports', 'recipe_search', 'recipes']),
+    );
+  });
 });

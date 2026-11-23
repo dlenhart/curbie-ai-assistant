@@ -95,7 +95,10 @@ function createOrchestrator(modelName, fetchFunction) {
   let idCounter = 0;
   const idGenerator = { next: (prefix) => `${prefix}_${++idCounter}` };
   const settings = createSettingsReader(modelName);
-  const skillAdapters = createSkillAdapters({ clock: { now: () => new Date() } });
+  const skillAdapters = createSkillAdapters({
+    clock: { now: () => new Date() },
+    recipeRepository: { search: () => [], findById: () => undefined },
+  });
   const toolRegistry = buildToolRegistry(loadSkillDocuments(skillsDirectory), skillAdapters, idGenerator);
   return new ConversationOrchestrator({
     model: new ModelLoadingDecorator(

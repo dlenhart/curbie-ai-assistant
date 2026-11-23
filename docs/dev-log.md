@@ -480,3 +480,54 @@ The last exchange was "What will the UI look like?" Claude showed the planned st
 - **Split the phases you want to measure separately.** Once loading had its own step and timeout, a slow drive and a slow model became two different problems with two different fixes.
 - **A security rule can shape a feature without blocking it.** "Never echo request data into a template" sounded like it ruled out keeping form input. Matching input against server-side lists kept both the rule and the usability.
 - **Back up before a one-way door.** A forward-only migration on the only copy of the data takes one `cp -R` to make safe.
+
+
+## Session 8 — 2026-11-23: Phase 3 recipes, from photos to a reviewed card in chat
+
+**Goal:** commit the Phase 2 follow-ups, then design and build Phase 3, narrowed to the one thing the owner cares about most: getting family recipes right.
+
+### How it unfolded
+
+1. **Housekeeping first.** At the owner's request Claude committed the Phase 2 follow-ups and merged them to `main` (`1a6904d`), then started Phase 3 on a new branch.
+2. **The scope shrank on purpose.** Phase 3 was "documents and recipes". The owner said "we can pause manuals for now. I'm more concerned about recipes and getting that right." Manuals, PDFs, and the device catalog were deferred, and the phase became recipes only.
+3. **The owner's workflow set the shape.** Phone photos get copied to the `CURBIE_BRAIN` drive, so the entry point is an inbox folder, not an upload page. File names group pages (`name.heic`, or `name-1.heic` and `name-2.heic`). The owner also asked for a review preview before anything answers questions, and a chat notification after a startup scan.
+4. **Three ways to turn OCR text into a recipe.** (A) The model writes the recipe: best on messy handwriting, but it can silently "tidy" 1 tsp into 1 tbsp, and the owner would then be reviewing model errors as well as OCR errors. (B) Rules only: predictable, but brittle on family cards with no headings. (C) The model labels numbered OCR lines with line numbers only, and code assembles the draft by copying text. The owner chose C. Anything the model doesn't label lands in `## Unsorted`, which blocks approval.
+5. **The builder check raised three owner questions.** Should recipes have sections (yes: Cake and Frosting)? How does a failed save re-render without breaking the `hbs` rule? How does chat show a recipe?
+6. **Pushback that changed the design.** The owner proposed storing recipes as Markdown. That dissolved the second question: with one text box and a strict shape there is no multi-field form, sections are free (`###`), and SAVE can't fail, so the `hbs` rule stays exactly as written instead of being reworded. Claude argued for keeping Markdown in SQLite rather than `.md` files, since edits made outside Curbie would skip review and leave search stale. The owner agreed; export as `.md` is a later feature.
+7. **Chat shows a card built by code.** The model gives a short answer, and the harness attaches the reviewed recipe (or a code-scaled copy) as a card. Quantities never come from the model retyping them.
+8. **Draft versus approved copies.** Editing an approved recipe doesn't change chat until it is approved again.
+9. **Built with subagent-driven development.** Twelve tasks, each implemented by a fresh agent and checked by a fresh reviewer, with nothing committed. The reviews earned their cost:
+   - A dangling symlink got past the data-dir path guard.
+   - Moving a discarded photo could overwrite an earlier one.
+   - Photos could be orphaned if the database write failed after the move.
+   - "1 ½ cups" parsed as 1.
+   - Metric rounding would have turned 0.25 l doubled into 1 l. Metric now rounds to whole ml and g, and l and kg keep two decimals.
+   - CRLF line endings from browser textareas.
+10. **Process slips kept recurring.** Constants outside `constants.ts`, inline types, and tests written after code came up in several reviews. That led the owner to ask for repo-local dev skills, queued for after Phase 3 along with architecture-test rules.
+
+### Decided
+- **Approach C** (model labels, code assembles) and the "copy text, never rewrite" rule (design §4.3.1a).
+- **Recipes are Markdown in SQLite** with draft and approved copies; SAVE always succeeds, APPROVE refuses with line-numbered problems.
+- **The `hbs` rule is unchanged.** Recipe pages render stored values only (§5.7).
+- **Kitchen fractions include thirds**, so 1/3 doubled is 2/3, not 5/8. Nothing rounds to 0.
+- **Display copies are `page-N.display.jpg`**, written first to `work/<recipe id>/` and moved with the photos only when a group succeeds. Photos are only ever moved, never deleted.
+- **The draft title falls back to the file group name**, `scale_recipe` takes exactly one of `factor` or `servings`, and the list filters by title in the browser.
+- **A scan runs in the background**, and the chat notice says "N scan problem(s)", because not every problem is an unreadable photo.
+- **Cards aren't stored in the transcript** until the History phase.
+
+### Produced
+- `server/`: `core/recipes/` (ingredient parser, kitchen fractions, scaler, Markdown parser, inbox grouper, labeller, draft assembler, scanner, library service), `adapters/ocr/` (the only `child_process` importer), `adapters/files/` (path guard and recipe file store), SQLite migration 3 with FTS5, the `recipes` skill, the Manage › Recipes pages, and recipe cards in chat. 509 tests in 54 suites at the end of the tasks, 526 after the final review's fix wave (approved titles no longer follow the draft, low-confidence marks clear on approve, DISCARD and DELETE ask first, the servings line stays in Unsorted for confirmation, `1 1/2-inch` no longer scales as 2 1/2).
+- Developer tooling the owner asked for mid-build: architecture-test rules for no comments, constants only in `constants.ts`, and types only in role files (543 tests), plus repo-local Claude Code skills `/curbie-check` and `/curbie-wrap` in `.claude/skills/`.
+- `ocr/curbie-ocr.swift` and `scripts/build-ocr.sh`, smoke-tested on the M1.
+- Docs: spec and plan for Phase 3, design §4.3.1a, §5.7, §6c, §8, `installation.md` §1.5b, the phase map, `CLAUDE.md`, `next-session.md`.
+
+### Still open
+- The owner's manual check of the whole flow with real card photos, then review and commit of `phase-3-recipes`.
+- Architecture-test rules and the repo-local `curbie-check` and `curbie-wrap` skills.
+- Deferred: manuals and the device catalog, `.md` export, cards in the transcript, drive speed, and the Phase 2 carry-overs.
+
+### Takeaways for the blog
+- **A storage format can dissolve a security conflict.** Markdown meant a save could never fail, so nothing needed to be echoed back into a template.
+- **Constrain the model to classification when the output is trusted.** "Copy text, never rewrite" shaped every task: the model returns line numbers, and code does the rest.
+- **Review guards with weird filesystems.** The dangling symlink only showed up because a reviewer tested for it.
+- **Process drift needs tooling, not reminders.** The same three slips recurred until the owner asked for machine-checked rules.

@@ -14,7 +14,7 @@ import { InvalidConfigurationError } from './errors/invalid-configuration.error'
 import type { CurbieConfig } from './interfaces/curbie-config.interface';
 import type { Environment } from './types/environment.type';
 
-export function parseConfig(environment: Environment, defaults: { readonly skillsDirectory: string }): CurbieConfig {
+export function parseConfig(environment: Environment, defaults: { readonly skillsDirectory: string; readonly ocrBinaryPath: string }): CurbieConfig {
   const dataDirectory = readSetting(environment, 'CURBIE_DATA_DIR');
   if (dataDirectory === undefined) {
     throw new InvalidConfigurationError(
@@ -50,6 +50,7 @@ export function parseConfig(environment: Environment, defaults: { readonly skill
       minimum: 1,
       maximum: MAX_TOOL_ROUNDS_LIMIT,
     }),
+    ocrBinaryPath: resolve(readSetting(environment, 'CURBIE_OCR_BINARY') ?? defaults.ocrBinaryPath),
   };
 }
 

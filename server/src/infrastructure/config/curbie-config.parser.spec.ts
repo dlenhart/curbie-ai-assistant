@@ -1,7 +1,7 @@
 import { parseConfig } from './curbie-config.parser';
 import { InvalidConfigurationError } from './errors/invalid-configuration.error';
 
-const DEFAULTS = { skillsDirectory: '/repo/skills' };
+const DEFAULTS = { skillsDirectory: '/repo/skills', ocrBinaryPath: '/repo/ocr/bin/curbie-ocr' };
 
 describe('parseConfig', () => {
   it('requires CURBIE_DATA_DIR', () => {
@@ -19,6 +19,7 @@ describe('parseConfig', () => {
       httpPort: 3000,
       historyMessageLimit: 10,
       maxToolRounds: 4,
+      ocrBinaryPath: '/repo/ocr/bin/curbie-ocr',
     });
   });
 
@@ -43,6 +44,13 @@ describe('parseConfig', () => {
     expect(config.httpPort).toBe(8080);
     expect(config.historyMessageLimit).toBe(0);
     expect(config.maxToolRounds).toBe(2);
+  });
+
+  it('ocrBinaryPath defaults and can be overridden by CURBIE_OCR_BINARY', () => {
+    expect(parseConfig({ CURBIE_DATA_DIR: '/data' }, DEFAULTS).ocrBinaryPath).toBe('/repo/ocr/bin/curbie-ocr');
+    expect(parseConfig({ CURBIE_DATA_DIR: '/data', CURBIE_OCR_BINARY: '/opt/curbie-ocr' }, DEFAULTS).ocrBinaryPath).toBe(
+      '/opt/curbie-ocr',
+    );
   });
 
   it.each(['0.0.0.0', '192.168.1.20', '::', '::1', 'localhost', '127.0.0.1'])('accepts %s as the HTTP host', (host) => {

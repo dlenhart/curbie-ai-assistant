@@ -1,0 +1,29 @@
+<div class="chat__window">
+  <div class="panel">
+    <a class="panel__back" href="/manage">◂ MANAGE</a>
+    <h2 class="panel__heading">RECIPES</h2>
+    <form class="recipe-scan" method="post" action="/manage/recipes/scan">
+      <button type="submit" class="neon-button">SCAN INBOX</button>
+      {{#if statusMessage}}<p class="chat__status" role="status">{{statusMessage}}</p>{{/if}}
+    </form>
+    {{#if scanProblems.length}}
+    <h2 class="panel__heading">LAST SCAN</h2>
+    <ul class="recipe-list recipe-problems">
+      {{#each scanProblems}}<li>{{subject}} — {{reason}}</li>{{/each}}
+    </ul>
+    {{/if}}
+    <h2 class="panel__heading">NEEDS REVIEW</h2>
+    {{#if needsReview.length}}
+    <ul class="recipe-list">
+      {{#each needsReview}}<li><a href="/manage/recipes/{{id}}">{{title}}</a></li>{{/each}}
+    </ul>
+    {{else}}
+    <p class="form-row__hint">Nothing to review.</p>
+    {{/if}}
+    <h2 class="panel__heading">APPROVED</h2>
+    <input id="recipe-filter" class="neon-input" type="search" placeholder="Filter recipes…" aria-label="Filter recipes">
+    <ul class="recipe-list" id="approved-recipes">
+      {{#each approved}}<li><a href="/manage/recipes/{{id}}">{{title}}</a>{{#if hasPendingEdit}} <span class="recipe-tag">edited</span>{{/if}}</li>{{/each}}
+    </ul>
+  </div>
+</div>

@@ -1,11 +1,14 @@
 import { resolve } from 'node:path';
 import { Module } from '@nestjs/common';
 import type Database from 'better-sqlite3';
+import { DataDirectoryRecipeFileStore } from './adapters/files/data-directory-recipe-file.store';
 import { OllamaModelCatalogAdapter } from './adapters/model/ollama-model-catalog.adapter';
 import { OllamaModelAdapter } from './adapters/model/ollama-model.adapter';
 import { OllamaModelLoader } from './adapters/model/ollama-model.loader';
+import { VisionOcrInvoker } from './adapters/ocr/vision-ocr.invoker';
 import { DatabaseLifecycle } from './adapters/persistence/database.lifecycle';
 import { openDatabase } from './adapters/persistence/database.factory';
+import { SqliteRecipeRepository } from './adapters/persistence/sqlite-recipe.repository';
 import { SqliteSettingsRepository } from './adapters/persistence/sqlite-settings.repository';
 import { SqliteTranscriptRepository } from './adapters/persistence/sqlite-transcript.repository';
 import { createSkillAdapters } from './adapters/skills/skill-adapters.factory';
@@ -16,6 +19,8 @@ import { SystemClock } from './adapters/system/system.clock';
 import { ChatPageController } from './adapters/web/chat-page.controller';
 import { ChatGateway } from './adapters/web/chat.gateway';
 import { ManagePageController } from './adapters/web/manage-page.controller';
+import { RecipeViewController } from './adapters/web/recipe-view.controller';
+import { RecipesPageController } from './adapters/web/recipes-page.controller';
 import { SettingsPageController } from './adapters/web/settings-page.controller';
 import {
   CLOCK,
@@ -27,7 +32,12 @@ import {
   MODEL,
   MODEL_CATALOG,
   MODEL_LOADER,
+  OCR,
   ORCHESTRATOR,
+  RECIPE_FILE_STORE,
+  RECIPE_LIBRARY,
+  RECIPE_REPOSITORY,
+  RECIPE_SCANNER,
   SETTINGS,
   SETTINGS_REPOSITORY,
   SUPPORTED_TIME_ZONES,
@@ -41,6 +51,12 @@ import type { ModelCatalogPort } from './core/model/interfaces/model-catalog-por
 import type { ModelLoaderPort } from './core/model/interfaces/model-loader-port.interface';
 import type { ModelPort } from './core/model/interfaces/model-port.interface';
 import { ModelLoadingDecorator } from './core/model/model-loading.decorator';
+import type { OcrPort } from './core/recipes/interfaces/ocr-port.interface';
+import type { RecipeFileStore } from './core/recipes/interfaces/recipe-file-store.interface';
+import type { RecipeRepository } from './core/recipes/interfaces/recipe-repository.interface';
+import { RecipeLibraryService } from './core/recipes/recipe-library.service';
+import { RecipeInboxScanner } from './core/recipes/recipe-inbox.scanner';
+import { RecipeLineLabeller } from './core/recipes/recipe-line.labeller';
 import { HouseholdSettingsService } from './core/settings/household-settings.service';
 import type { SettingsRepository } from './core/settings/interfaces/settings-repository.interface';
 import type { Clock } from './core/shared/interfaces/clock.interface';
@@ -52,11 +68,14 @@ import { parseConfig } from './infrastructure/config/curbie-config.parser';
 import type { CurbieConfig } from './infrastructure/config/interfaces/curbie-config.interface';
 
 @Module({
-  controllers: [ChatPageController, ManagePageController, SettingsPageController],
+  controllers: [ChatPageController, ManagePageController, SettingsPageController, RecipesPageController, RecipeViewController],
   providers: [
     {
       provide: CONFIG,
-      useFactory: (): CurbieConfig => parseConfig(process.env, { skillsDirectory: resolve(process.cwd(), '..', 'skills') }),
+      useFactory: (): CurbieConfig => parseConfig(process.env, {
+        skillsDirectory: resolve(process.cwd(), '..', 'skills'),
+        ocrBinaryPath: resolve(process.cwd(), '..', 'ocr', 'bin', 'curbie-ocr'),
+      }),
     },
     { provide: CLOCK, useFactory: (): Clock => new SystemClock() },
     { provide: ID_GENERATOR, useFactory: (): IdGenerator => new RandomIdGenerator() },
@@ -131,9 +150,18 @@ import type { CurbieConfig } from './infrastructure/config/interfaces/curbie-con
     },
     {
       provide: TOOL_REGISTRY,
-      inject: [CONFIG, ID_GENERATOR, CLOCK],
-      useFactory: (config: CurbieConfig, idGenerator: IdGenerator, clock: Clock): ToolRegistry =>
-        buildToolRegistry(loadSkillDocuments(config.skillsDirectory), createSkillAdapters({ clock }), idGenerator),
+      inject: [CONFIG, ID_GENERATOR, CLOCK, RECIPE_REPOSITORY],
+      useFactory: (
+        config: CurbieConfig,
+        idGenerator: IdGenerator,
+        clock: Clock,
+        recipeRepository: RecipeRepository,
+      ): ToolRegistry =>
+        buildToolRegistry(
+          loadSkillDocuments(config.skillsDirectory),
+          createSkillAdapters({ clock, recipeRepository }),
+          idGenerator,
+        ),
     },
     {
       provide: ORCHESTRATOR,
@@ -160,6 +188,52 @@ import type { CurbieConfig } from './infrastructure/config/interfaces/curbie-con
         }),
     },
     { provide: GENERATION_QUEUE, useFactory: (): SerialTaskQueue => new SerialTaskQueue() },
+    {
+      provide: OCR,
+      inject: [CONFIG],
+      useFactory: (config: CurbieConfig): OcrPort =>
+        new VisionOcrInvoker({ binaryPath: config.ocrBinaryPath, dataDirectory: config.dataDirectory }),
+    },
+    {
+      provide: RECIPE_REPOSITORY,
+      inject: [DATABASE],
+      useFactory: (database: Database.Database): RecipeRepository => new SqliteRecipeRepository(database),
+    },
+    {
+      provide: RECIPE_FILE_STORE,
+      inject: [CONFIG],
+      useFactory: (config: CurbieConfig): RecipeFileStore => new DataDirectoryRecipeFileStore(config.dataDirectory),
+    },
+    {
+      provide: RECIPE_SCANNER,
+      inject: [RECIPE_FILE_STORE, OCR, MODEL, RECIPE_REPOSITORY, SETTINGS, GENERATION_QUEUE, CLOCK, ID_GENERATOR],
+      useFactory: (
+        files: RecipeFileStore,
+        ocr: OcrPort,
+        model: ModelPort,
+        repository: RecipeRepository,
+        settings: HouseholdSettingsService,
+        generationQueue: SerialTaskQueue,
+        clock: Clock,
+        idGenerator: IdGenerator,
+      ): RecipeInboxScanner =>
+        new RecipeInboxScanner({
+          files,
+          ocr,
+          labeller: new RecipeLineLabeller(model),
+          repository,
+          settings,
+          generationQueue,
+          clock,
+          idGenerator,
+        }),
+    },
+    {
+      provide: RECIPE_LIBRARY,
+      inject: [RECIPE_REPOSITORY, RECIPE_FILE_STORE, CLOCK],
+      useFactory: (repository: RecipeRepository, files: RecipeFileStore, clock: Clock): RecipeLibraryService =>
+        new RecipeLibraryService({ repository, files, clock }),
+    },
     DatabaseLifecycle,
     ChatGateway,
   ],

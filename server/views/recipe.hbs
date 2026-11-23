@@ -1,0 +1,9 @@
+<div class="chat__window">
+  <div class="panel">
+    <h2 class="panel__heading">{{title}}</h2>
+    <div class="recipe-photos">
+      {{#each pageImages}}<a href="{{href}}"><img src="{{href}}" alt="{{label}}"></a>{{/each}}
+    </div>
+    <pre class="recipe-text">{{approvedMarkdown}}</pre>
+  </div>
+</div>

@@ -48,6 +48,19 @@ class EchoAdapter implements SkillAdapter {
   }
 }
 
+class CardAdapter implements SkillAdapter {
+  readonly name = 'echo';
+  async execute(): Promise<ToolResult> {
+    return {
+      title: 'Recipe: Toast',
+      content: '# Toast',
+      requiresQuote: false,
+      href: '/recipes/recipe_1',
+      card: { heading: 'Toast', body: '# Toast', href: '/recipes/recipe_1' },
+    };
+  }
+}
+
 class FailingAdapter implements SkillAdapter {
   readonly name = 'echo';
   async execute(): Promise<ToolResult> {
@@ -75,6 +88,20 @@ describe('ToolRegistry', () => {
       source: { id: 'src_1', skillName: 'echo', title: 'Echo', content: 'echo: hi', requiresQuote: false },
     });
     expect(adapter.calls).toEqual([{ toolName: 'echo_text', toolArguments: { text: 'hi' }, context: CONTEXT }]);
+  });
+
+  it('copies card and href from the tool result onto the source', async () => {
+    const registry = new ToolRegistry(new SequentialIdGenerator());
+    registry.register(echoSkill(), new CardAdapter());
+
+    const outcome = await registry.execute({ name: 'echo_text', arguments: { text: 'hi' } }, CONTEXT);
+
+    expect(outcome.kind === 'success' && outcome.source.href).toBe('/recipes/recipe_1');
+    expect(outcome.kind === 'success' && outcome.source.card).toEqual({
+      heading: 'Toast',
+      body: '# Toast',
+      href: '/recipes/recipe_1',
+    });
   });
 
   it('rejects unknown tools without calling any adapter', async () => {

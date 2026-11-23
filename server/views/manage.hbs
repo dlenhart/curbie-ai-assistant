@@ -2,6 +2,7 @@
   <div class="panel">
     <h2 class="panel__heading">MANAGE</h2>
     <div class="tile-grid">
+      <a class="tile" href="/manage/recipes"><span class="tile__title">RECIPES</span><span class="tile__count">{{approvedRecipeCount}} <small class="tile__unit">recipes</small></span><span class="tile__detail">Scanned recipe cards and documents</span>{{#if needsReviewRecipeCount}}<span class="tile__flag">▲ {{needsReviewRecipeCount}} need review</span>{{/if}}</a>
       <a class="tile" href="/manage/settings"><span class="tile__title">SETTINGS</span><span class="tile__count">⚙</span><span class="tile__detail">Model, time zone, and units</span></a>
     </div>
   </div>

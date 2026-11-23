@@ -5,6 +5,7 @@ import type { Citation } from '../answers/interfaces/citation.interface';
 import type { StructuredAnswer } from '../answers/interfaces/structured-answer.interface';
 import { parseStructuredAnswer } from '../answers/structured-answer.parser';
 import type { ChatMessage } from '../model/types/chat-message.type';
+import type { SourceCard } from '../sources/interfaces/source-card.interface';
 import type { SourceRecord } from '../sources/interfaces/source-record.interface';
 import { EmptyMessageError } from './errors/empty-message.error';
 import type { AssistantReply } from './interfaces/assistant-reply.interface';
@@ -116,15 +117,17 @@ export class ConversationOrchestrator {
     sourceIds: readonly string[],
     sourcesById: ReadonlyMap<string, SourceRecord>,
   ): AssistantReply {
-    const citations: Citation[] = [...new Set(sourceIds)].map((sourceId) => {
+    const citedSources = [...new Set(sourceIds)].map((sourceId) => {
       const source = sourcesById.get(sourceId);
       if (source === undefined) {
         throw new Error(`Invariant violated: cited source ${sourceId} is missing after the contract check.`);
       }
-      return { sourceId: source.id, title: source.title, skillName: source.skillName };
+      return source;
     });
+    const citations = citedSources.map(toCitation);
+    const cards = category === 'cited' ? citedSources.flatMap(toCards) : [];
     this.recordMessage(conversationId, 'assistant', text, category, citations);
-    return { conversationId, category, text, citations };
+    return { conversationId, category, text, citations, cards };
   }
 
   private recordMessage(
@@ -148,6 +151,15 @@ export class ConversationOrchestrator {
   private timestamp(): string {
     return this.dependencies.clock.now().toISOString();
   }
+}
+
+function toCitation(source: SourceRecord): Citation {
+  const citation: Citation = { sourceId: source.id, title: source.title, skillName: source.skillName };
+  return source.href === undefined ? citation : { ...citation, href: source.href };
+}
+
+function toCards(source: SourceRecord): SourceCard[] {
+  return source.card === undefined ? [] : [source.card];
 }
 
 function toChatMessage(stored: StoredMessage): ChatMessage {

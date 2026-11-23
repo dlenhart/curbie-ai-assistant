@@ -192,12 +192,18 @@ Three kinds:
 - **OCR confidence:** low-confidence passages are flagged in answers, not presented as certain.
 
 #### 4.3.1a Recipes
-A primary use case: scanning a physical folder of family recipes (printed and handwritten) so Curbie can answer "What's the recipe for our Texas sheet cake?", including from a phone in the kitchen.
+A primary use case: scanning a physical folder of family recipes (printed and handwritten) so Curbie can answer "What's the recipe for our Texas sheet cake?", including from a phone in the kitchen. **Built in Phase 3 (2026-11-23); full design in `docs/superpowers/specs/2026-11-23-curbie-phase-3-recipes-design.md`.** Manuals and the device catalog (§4.3.1) were deferred so recipes could be done right first.
 - **Printed vs. handwritten:** printed recipes OCR reliably. Handwritten cards are much harder, which is why Apple Vision was chosen over Tesseract.
-- **Show the original card** alongside the answer. OCR errors in recipes fail quietly ("1 tbsp" read as "1 tsp"), so the source image is always one tap away.
-- **Structured on ingest:** title, ingredients (with parsed quantities and units), steps, source. This allows "What do I need for the sheet cake?" to return just the ingredients.
-- **Recipe scaling:** "Double the chili recipe" / "Scale this to 6 servings" combines structured quantities with the calculator, so there's no model arithmetic.
-- **Correct once, stays fixed:** OCR mistakes are corrected in the Manage → Recipes page, and the corrected text becomes the indexed version.
+- **Photos arrive by file drop.** The owner copies phone photos into `<data dir>/inbox/`. `name.heic` is a one-photo recipe, `name-1.heic`, `name-2.heic` are the pages of one recipe, and only a trailing `-1` to `-9` counts as a page number. Inconsistent numbering leaves the files in the inbox with the reason reported. A scan runs once after startup and when **SCAN INBOX** is pressed; it runs in the background.
+- **The model labels, code assembles (decided 2026-11-23).** OCR lines are numbered, the model returns only line numbers (title, servings, headings, ingredients, steps), and code copies the OCR text, unaltered, into a Markdown draft. Lines nobody labelled go under `## Unsorted`, which blocks approval. The servings line's number becomes `Serves:`, and the original line also goes under `## Unsorted` so the owner confirms it ("Makes 2 dozen" is not 2 servings). A model that writes the recipe was rejected because it can silently "tidy" `1 tsp` into `1 tbsp`; rules alone were rejected as too brittle for family cards. If the model labels no title, the draft's title is the file group name.
+- **A recipe is Markdown in a fixed shape,** stored in SQLite: `# Title`, optional `Serves:`, `## Ingredients`, `## Steps`, optional `## Notes`, with optional `###` sections such as Cake and Frosting. Code parses ingredient lines into quantity, unit, and item when it scales or validates. Capital `T` is tablespoon and lowercase `t` is teaspoon. The owner proposed Markdown; it replaced a multi-field form, made sections free, and made SAVE unable to fail. Files on the drive were rejected because edits outside Curbie would skip review and leave search stale. Export as `.md` is a later feature.
+- **Draft and approved copies.** Each recipe holds a draft (what the review page edits) and an approved copy (what chat, scaling, and search use). Editing never changes chat until the owner approves again. SAVE always succeeds; APPROVE refuses while the draft has problems (an `## Unsorted` section, an unknown heading, a stray line, no ingredients or steps), listing each with its line number. Approval clears low-confidence marks, which only ever appear in the review page's OCR panel.
+- **Show the original card** alongside the answer. OCR errors in recipes fail quietly ("1 tbsp" read as "1 tsp"), so the source photos are one tap away. Each photo gets a JPEG display copy (`page-N.display.jpg`), since browsers can't show HEIC.
+- **The card is built by code.** When an answer cites `get_recipe` or `scale_recipe`, the harness attaches the recipe, as Markdown built from the reviewed copy, under the model's short answer. Quantities never come from the model retyping them. Cards are shown with `textContent` and are not stored in the transcript until the History phase.
+- **Recipe scaling:** "Double it" / "Scale this to 6 servings" uses `scale_recipe` with exactly one of `factor` (above 0, at most 20) or `servings` (needs a single-number `Serves:`). Code multiplies parsed quantities (ranges scale both ends; "salt to taste" is left unchanged and marked), rounding to the nearest kitchen fraction (eighths and thirds, so 1/3 doubled is 2/3). Metric units round to whole ml and g, and l and kg keep two decimals. A positive quantity never rounds to zero. The card keeps the recipe's own units; there is no imperial/metric conversion.
+- **Search:** FTS5 over the approved copy only, ranked by `bm25`; the query is split into quoted words joined with `OR`, so "our Texas sheet cake recipe" still finds the card.
+- **Correct once, stays fixed:** OCR mistakes are corrected on Manage → Recipes, and the approved text is the indexed version. Photos are only ever moved (to `originals/recipes/<id>/`, or `discarded/<id>/`), never deleted.
+- **Chat notice:** after a scan, the chat page shows `▲ N new recipes ready to review · N scan problem(s)`, built server-side from stored counts. Phase 4's Inbox replaces it.
 
 #### 4.3.2 Morning briefing
 - At a configured time, Curbie compiles weather + news headlines + today's calendar + pending reminders and delivers it through the notification channels (§4.6).
@@ -555,12 +561,16 @@ RSS items, web results, documents, OCR output, and Wikipedia passages may contai
 **Process spawning is confined to one place:**
 - The **OCR helper invoker** is the only code allowed to spawn a process. It uses `execFile`/`spawn` with a fixed binary path and an argument array, **never `exec` with a command string**, and never through a shell.
 - The file path passed to OCR is resolved to its real path (following symlinks) and must be inside the data dir. Otherwise it is rejected.
+- **Built in Phase 3:** the invoker (`adapters/ocr/vision-ocr.invoker.ts`) is real and is the only `child_process` importer, enforced by the architecture test. It calls a Swift Apple Vision helper (`ocr/curbie-ocr.swift`, built by `scripts/build-ocr.sh`) and validates its JSON output.
 - **System status** uses Node APIs (e.g. `fs.statfs`), not shell commands. Model-supplied text is never passed to any process.
 - **Enforced by test:** an architecture test fails the build if any module other than the OCR invoker imports `child_process` (or similar process-spawning APIs).
 
 **File operations are confined:**
 - All file writes and deletes (ingestion, forget, retention purge, Manage deletes, skill builder) go through a path guard that resolves real paths and allows only the **data dir** and **`skills/`**.
 - No recursive deletes outside those roots, ever. Deleting a record deletes that record's specific files, not directories by pattern.
+- **Built in Phase 3:** `adapters/files/data-directory-path.guard.ts` resolves real paths (including dangling symlinks and `..`) and every recipe file move goes through it. Nothing deletes an owner's photo; discarding a recipe moves its photos to `discarded/`.
+
+**The `hbs` rule is unchanged (2026-11-23).** Render locals come only from server-side values, never from request data. The recipe pages follow it: they render stored values only. Route params and form bodies select a stored record and the template gets the record's fields. SAVE and APPROVE redirect and never re-render what was posted, which is possible because recipes are one Markdown text and a save can't fail.
 
 **Least privilege:**
 - Curbie runs as a **dedicated non-admin macOS user** with read/write access only to the data dir and `skills/`. Even a bug can't reach the rest of the Mac.
@@ -633,6 +643,8 @@ ai-assistant/
 
 **Migration tool (decided in Phase 1):** a small in-house migrator, no third-party dependency. Migrations are numbered 1..n in `server/src/constants.ts` (`MIGRATIONS`), each applied in its own transaction and recorded in `schema_migrations`. The migrator refuses a gap in the numbering and refuses a database carrying a migration the code doesn't know.
 
+**Migration 3 (Phase 3, 2026-11-23): recipes.** Tables for recipes (draft and approved Markdown, status, the OCR record, timestamps), recipe pages (relative file paths and SHA-256), the latest scan report, and an FTS5 index built from approved Markdown only. File paths are stored relative to the data dir. Details: `docs/superpowers/specs/2026-11-23-curbie-phase-3-recipes-design.md` §5.6.
+
 **Deploying updates to the M1:**
 0. Make sure any skills created by the skill builder (uncommitted changes in `skills/`) are committed or discarded first. The owner does this manually before deploying.
 1. Pull the latest code, install dependencies from the lockfile, and run `npm audit`.
@@ -696,7 +708,7 @@ Raised in a design review (2026-10-02). These are the assumptions everything els
 - Policy for jobs that came due while the host was down: fire late, or mark missed and report.
 - Conversation retention basis: is the 30 days counted from when a conversation started or from its last message (relevant now that conversations can be resumed, §4.1.2)?
 - Conversation context policy: turns per request, summarization (§4.11).
-- Recipe ingestion flow: batch scanning (scanner vs. phone photos) and how recipes are reviewed before indexing.
+- Recipe ingestion flow: **decided 2026-11-23** (§4.3.1a). Phone photos dropped in the inbox folder, read by OCR, labelled by the model, assembled by code into a Markdown draft, reviewed and approved on Manage › Recipes. Still open: exporting recipes as `.md`, and tuning the OCR confidence threshold on real cards.
 - Model swapping: acceptable load latency when switching between the general and coding models on 16 GB.
 - Local TLS (mkcert) and certificate distribution, deferred on 2026-11-15 until a feature needs a secure context (§5.3).
 - Watcher condition types for v1 (threshold, keyword match, others?).

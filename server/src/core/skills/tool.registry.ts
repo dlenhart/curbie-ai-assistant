@@ -68,6 +68,8 @@ export class ToolRegistry {
           title: result.title,
           content: result.content,
           requiresQuote: result.requiresQuote,
+          ...(result.card === undefined ? {} : { card: result.card }),
+          ...(result.href === undefined ? {} : { href: result.href }),
         },
       };
     } catch (error) {

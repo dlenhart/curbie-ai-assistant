@@ -49,14 +49,51 @@ class AdderAdapter implements SkillAdapter {
   }
 }
 
+const RECIPE_CARD = { heading: 'Toast', body: '# Toast\n## Ingredients\n- 2 slices bread', href: '/recipes/recipe_1' };
+
+const recipeCardSkill: SkillDefinition = {
+  name: 'recipe-card',
+  description: 'Shows a recipe.',
+  kind: 'lookup',
+  adapterName: 'recipe-card',
+  instructions: 'Use show_recipe.',
+  tools: [
+    {
+      name: 'show_recipe',
+      description: 'Show a recipe.',
+      parameters: { type: 'object', properties: {}, additionalProperties: false },
+    },
+  ],
+};
+
+class RecipeCardAdapter implements SkillAdapter {
+  readonly name = 'recipe-card';
+
+  async execute(): Promise<ToolResult> {
+    return {
+      title: 'Recipe: Toast',
+      content: RECIPE_CARD.body,
+      requiresQuote: false,
+      href: RECIPE_CARD.href,
+      card: RECIPE_CARD,
+    };
+  }
+}
+
 function createOrchestrator(
   model: ScriptedModel,
-  overrides: { maxToolRounds?: number; historyMessageLimit?: number; settings?: FixedSettingsReader } = {},
+  overrides: {
+    maxToolRounds?: number;
+    historyMessageLimit?: number;
+    settings?: FixedSettingsReader;
+    hasRecipeCardSkill?: boolean;
+  } = {},
 ) {
   const idGenerator = new SequentialIdGenerator();
   const toolRegistry = new ToolRegistry(idGenerator);
   const adderAdapter = new AdderAdapter();
   toolRegistry.register(adderSkill, adderAdapter);
+  if (overrides.hasRecipeCardSkill === true) toolRegistry.register(recipeCardSkill, new RecipeCardAdapter());
   const transcripts = new InMemoryTranscriptRepository();
   const orchestrator = new ConversationOrchestrator({
     model,
@@ -90,6 +127,7 @@ describe('ConversationOrchestrator', () => {
       category: 'cited',
       text: '2 + 3 is 5.',
       citations: [{ sourceId: 'src_1', title: 'Adder', skillName: 'adder' }],
+      cards: [],
     });
     const toolMessage = model.receivedRequests[1].messages.find((message) => message.role === 'tool');
     expect(toolMessage?.content).toContain('<source id="src_1" title="Adder">');
@@ -143,7 +181,7 @@ describe('ConversationOrchestrator', () => {
 
     const reply = await orchestrator.handleUserMessage(input);
 
-    expect(reply).toEqual({ conversationId: 'conv_1', category: 'dont_know', text: DONT_KNOW_FALLBACK_TEXT, citations: [] });
+    expect(reply).toEqual({ conversationId: 'conv_1', category: 'dont_know', text: DONT_KNOW_FALLBACK_TEXT, citations: [], cards: [] });
     expect(transcripts.recentMessages('conv_1', 1)[0].content).toBe(DONT_KNOW_FALLBACK_TEXT);
   });
 
@@ -188,6 +226,7 @@ describe('ConversationOrchestrator', () => {
 
     expect(reply.category).toBe('error');
     expect(reply.text).toContain('2 tool steps');
+    expect(reply.cards).toEqual([]);
     expect(model.receivedRequests).toHaveLength(2);
   });
 
@@ -241,6 +280,43 @@ describe('ConversationOrchestrator', () => {
     const reply = await orchestrator.handleUserMessage(input);
 
     expect(reply.citations).toHaveLength(1);
+  });
+
+  it("attaches the cited source's card to the reply and its href to the citation", async () => {
+    const model = new ScriptedModel([
+      toolCallResponse('show_recipe', {}),
+      textResponse(''),
+      answerResponse({ category: 'cited', text: "Here's the toast.", sourceIds: ['src_1'], quotes: [] }),
+    ]);
+    const { orchestrator, transcripts } = createOrchestrator(model, { hasRecipeCardSkill: true });
+
+    const reply = await orchestrator.handleUserMessage(input);
+
+    expect(reply.cards).toEqual([RECIPE_CARD]);
+    expect(reply.citations).toEqual([
+      { sourceId: 'src_1', title: 'Recipe: Toast', skillName: 'recipe-card', href: '/recipes/recipe_1' },
+    ]);
+    expect(transcripts.recentMessages('conv_1', 1)[0].citations).toEqual(reply.citations);
+  });
+
+  it('attaches no card for an uncited recipe source or a dont_know answer', async () => {
+    const model = new ScriptedModel([
+      { content: '', toolCalls: [{ name: 'show_recipe', arguments: {} }, { name: 'add_numbers', arguments: { a: 2, b: 3 } }] },
+      textResponse(''),
+      answerResponse({ category: 'cited', text: '2 + 3 is 5.', sourceIds: ['src_2'], quotes: [] }),
+      toolCallResponse('show_recipe', {}),
+      textResponse(''),
+      answerResponse({ category: 'dont_know', text: "I don't know.", sourceIds: ['src_3'], quotes: [] }),
+    ]);
+    const { orchestrator } = createOrchestrator(model, { hasRecipeCardSkill: true });
+
+    const uncitedReply = await orchestrator.handleUserMessage(input);
+    const dontKnowReply = await orchestrator.handleUserMessage({ ...input, text: 'And the toast?' });
+
+    expect(uncitedReply.category).toBe('cited');
+    expect(uncitedReply.cards).toEqual([]);
+    expect(dontKnowReply.category).toBe('dont_know');
+    expect(dontKnowReply.cards).toEqual([]);
   });
 
   it('refuses an empty message before calling the model', async () => {
