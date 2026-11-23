@@ -10,12 +10,21 @@ import WebSocket from 'ws';
 import { DataDirectoryUnavailableError } from './adapters/persistence/errors/data-directory-unavailable.error';
 import { configureApp } from './adapters/web/app.configurator';
 import { AppModule } from './app.module';
-import { CONFIG, DATA_DIRECTORY_MARKER, ID_GENERATOR, MODEL, MODEL_CATALOG, SETTINGS_REPOSITORY } from './constants';
+import {
+  CONFIG,
+  DATA_DIRECTORY_MARKER,
+  ID_GENERATOR,
+  MODEL,
+  MODEL_CATALOG,
+  MODEL_LOADER,
+  SETTINGS_REPOSITORY,
+} from './constants';
 import type { SettingsRepository } from './core/settings/interfaces/settings-repository.interface';
 import { ModelUnavailableError } from './core/model/errors/model-unavailable.error';
 import type { ModelResponse } from './core/model/interfaces/model-response.interface';
 import { answerResponse, ScriptedModel, textResponse, toolCallResponse } from './core/testing/scripted.model';
 import { FakeModelCatalog } from './core/testing/fake-model.catalog';
+import { RecordingModelLoader } from './core/testing/recording-model.loader';
 import { SequentialIdGenerator } from './core/testing/sequential-id.generator';
 import { parseConfig } from './infrastructure/config/curbie-config.parser';
 import type { ServerMessage } from './interfaces/server-message.interface';
@@ -28,6 +37,7 @@ describe('Curbie app (integration)', () => {
   let model: ScriptedModel;
   let serverAddress: string;
   let modelCatalog: FakeModelCatalog;
+  let modelLoader: RecordingModelLoader;
 
   function testingModule(directory: string) {
     return Test.createTestingModule({ imports: [AppModule] })
@@ -43,15 +53,19 @@ describe('Curbie app (integration)', () => {
       .overrideProvider(ID_GENERATOR)
       .useValue(new SequentialIdGenerator())
       .overrideProvider(MODEL_CATALOG)
-      .useValue(modelCatalog);
+      .useValue(modelCatalog)
+      .overrideProvider(MODEL_LOADER)
+      .useValue(modelLoader);
   }
 
   async function startApp(
     responses: Array<ModelResponse | Error>,
     catalog: FakeModelCatalog = new FakeModelCatalog(['qwen3:4b-instruct', 'qwen3:8b']),
+    loader: RecordingModelLoader = new RecordingModelLoader(),
   ): Promise<void> {
     model = new ScriptedModel(responses);
     modelCatalog = catalog;
+    modelLoader = loader;
     const moduleRef = await testingModule(dataDirectory).compile();
     app = moduleRef.createNestApplication<NestExpressApplication>();
     configureApp(app);
@@ -230,6 +244,27 @@ describe('Curbie app (integration)', () => {
       expect(model.receivedRequests[0].messages[0].content).toContain('metric (');
     });
 
+    it('starts loading the saved model in the background so the first reply does not wait for it', async () => {
+      await startApp([]);
+      const saved = await request(app!.getHttpServer()).post('/manage/settings').type('form').send(VALID_FORM);
+      expect(saved.status).toBe(303);
+      expect(modelLoader.requestedModelNames).toEqual(['qwen3:8b']);
+    });
+
+    it('still saves when loading the new model fails', async () => {
+      await startApp([], undefined, new RecordingModelLoader(new ModelUnavailableError('ECONNREFUSED')));
+      const saved = await request(app!.getHttpServer()).post('/manage/settings').type('form').send(VALID_FORM);
+      expect(saved.status).toBe(303);
+      const page = await request(app!.getHttpServer()).get('/manage/settings');
+      expect(page.text).toContain('<option value="qwen3:8b" selected>');
+    });
+
+    it('loads nothing when a save fails', async () => {
+      await startApp([]);
+      await request(app!.getHttpServer()).post('/manage/settings').type('form').send({ ...VALID_FORM, units: 'kelvin' });
+      expect(modelLoader.requestedModelNames).toEqual([]);
+    });
+
     it('answers 400 with the field error for an invalid time zone and saves nothing', async () => {
       await startApp([]);
       const response = await request(app!.getHttpServer())
@@ -243,11 +278,46 @@ describe('Curbie app (integration)', () => {
       expect(page.text).toContain('<option value="qwen3:4b-instruct" selected>');
     });
 
+    it('keeps the valid fields of a failed save on the form', async () => {
+      await startApp([]);
+      const response = await request(app!.getHttpServer())
+        .post('/manage/settings')
+        .type('form')
+        .send({ ...VALID_FORM, timeZone: 'Mars/Olympus' });
+      expect(response.status).toBe(400);
+      expect(response.text).toContain('<option value="qwen3:8b" selected>');
+      expect(response.text).toContain('value="metric" checked');
+    });
+
+    it('drops the stored-value error for a field the failed save fixed', async () => {
+      await startApp([]);
+      app!.get<SettingsRepository>(SETTINGS_REPOSITORY).saveAll({ timeZone: 'Mars/Olympus' }, '2026-11-15T12:00:00.000Z');
+      const response = await request(app!.getHttpServer())
+        .post('/manage/settings')
+        .type('form')
+        .send({ ...VALID_FORM, units: 'kelvin' });
+      expect(response.status).toBe(400);
+      expect(response.text).toContain('<option value="America/Chicago" selected>');
+      expect(response.text).not.toContain('Choose a time zone from the list.');
+    });
+
     it('refuses a POST from another origin and saves nothing', async () => {
       await startApp([]);
       const response = await request(app!.getHttpServer())
         .post('/manage/settings')
         .set('Origin', 'http://evil.example')
+        .type('form')
+        .send(VALID_FORM);
+      expect(response.status).toBe(403);
+      const page = await request(app!.getHttpServer()).get('/manage/settings');
+      expect(page.text).toContain('value="imperial" checked');
+    });
+
+    it('refuses a cross-site POST that carries no Origin header and saves nothing', async () => {
+      await startApp([]);
+      const response = await request(app!.getHttpServer())
+        .post('/manage/settings')
+        .set('Sec-Fetch-Site', 'cross-site')
         .type('form')
         .send(VALID_FORM);
       expect(response.status).toBe(403);
@@ -289,6 +359,7 @@ describe('Curbie app (integration)', () => {
     rmSync(join(dataDirectory, DATA_DIRECTORY_MARKER));
     model = new ScriptedModel([]);
     modelCatalog = new FakeModelCatalog([]);
+    modelLoader = new RecordingModelLoader();
     await expect(testingModule(dataDirectory).compile()).rejects.toThrow(DataDirectoryUnavailableError);
   });
 });

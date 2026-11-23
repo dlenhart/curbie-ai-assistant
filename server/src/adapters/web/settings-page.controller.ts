@@ -1,9 +1,11 @@
-import { Body, Controller, Get, Inject, Post, Query, Render, Res } from '@nestjs/common';
-import { MODEL_CATALOG, SETTINGS } from '../../constants';
+import { Body, Controller, Get, Inject, Logger, Post, Query, Render, Res } from '@nestjs/common';
+import { MODEL_CATALOG, MODEL_LOADER, SETTINGS } from '../../constants';
 import { ModelUnavailableError } from '../../core/model/errors/model-unavailable.error';
 import type { ModelCatalogPort } from '../../core/model/interfaces/model-catalog-port.interface';
+import type { ModelLoaderPort } from '../../core/model/interfaces/model-loader-port.interface';
 import { InvalidSettingsError } from '../../core/settings/errors/invalid-settings.error';
 import type { HouseholdSettingsService } from '../../core/settings/household-settings.service';
+import type { HouseholdSettings } from '../../core/settings/interfaces/household-settings.interface';
 import type { SettingsFieldErrors } from '../../core/settings/types/settings-field-errors.type';
 import type { RenderingResponse } from './interfaces/rendering-response.interface';
 import type { SettingsPageModel } from './interfaces/settings-page-model.interface';
@@ -14,12 +16,14 @@ export class SettingsPageController {
   constructor(
     @Inject(SETTINGS) private readonly settings: HouseholdSettingsService,
     @Inject(MODEL_CATALOG) private readonly modelCatalog: ModelCatalogPort,
+    @Inject(MODEL_LOADER) private readonly modelLoader: ModelLoaderPort,
   ) {}
 
   @Get('/manage/settings')
   @Render('settings')
   async showSettings(@Query('saved') saved: unknown): Promise<SettingsPageModel> {
-    return this.buildPage({}, saved === '1');
+    const editable = this.settings.readForEditing();
+    return this.buildPage(editable.settings, editable.fieldErrors, saved === '1');
   }
 
   @Post('/manage/settings')
@@ -27,24 +31,36 @@ export class SettingsPageController {
     @Body() body: Readonly<Record<string, unknown>>,
     @Res() response: RenderingResponse,
   ): Promise<void> {
+    let saved: HouseholdSettings;
     try {
-      await this.settings.update(body ?? {});
+      saved = await this.settings.update(body ?? {});
     } catch (error) {
       if (!(error instanceof InvalidSettingsError)) throw error;
-      response.status(400).render('settings', await this.buildPage(error.fieldErrors, false));
+      const shownSettings = { ...this.settings.readForEditing().settings, ...error.acceptedValues };
+      response.status(400).render('settings', await this.buildPage(shownSettings, error.fieldErrors, false));
       return;
     }
+    this.startLoadingInBackground(saved.modelName);
     response.writeHead(303, { location: '/manage/settings?saved=1' });
     response.end();
   }
 
-  private async buildPage(fieldErrors: SettingsFieldErrors, isSaved: boolean): Promise<SettingsPageModel> {
-    const editable = this.settings.readForEditing();
+  private startLoadingInBackground(modelName: string): void {
+    this.modelLoader.ensureLoaded(modelName).catch((error: unknown) => {
+      Logger.warn(`Could not load ${modelName} after saving settings: ${(error as Error).message}`, 'Settings');
+    });
+  }
+
+  private async buildPage(
+    settings: HouseholdSettings,
+    fieldErrors: SettingsFieldErrors,
+    isSaved: boolean,
+  ): Promise<SettingsPageModel> {
     return buildSettingsPageModel({
-      settings: editable.settings,
+      settings,
       installedModelNames: await this.listInstalledModelNames(),
       timeZones: this.settings.supportedTimeZones(),
-      fieldErrors: { ...editable.fieldErrors, ...fieldErrors },
+      fieldErrors,
       isSaved,
     });
   }

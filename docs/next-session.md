@@ -1,58 +1,37 @@
 # Pick Up Where I Left Off
 
-Resume plan, rewritten 2026-11-15 at the end of Session 6. Work through the steps in order, checking each one's current state before acting. Delete or rewrite this file once the steps are done.
+Resume plan, rewritten 2026-11-23 at the end of Session 7. Work through the steps in order, checking each one's current state before acting. Delete or rewrite this file once the steps are done.
 
-## State on 2026-11-15
+## State on 2026-11-23
 
 On the M1 (Apple M1, 16 GB, Node 20.20):
 
-- **Phase 2 is built, uncommitted, on branch `phase-2-lan-settings-frame`.** 229 tests in 29 suites pass, and the typecheck and build are clean. The plan is `docs/superpowers/plans/2026-11-15-curbie-phase-2-lan-settings-frame.md`, and the dev log has Session 6.
-- **Built:**
-  - LAN access over plain HTTP by IP (opt-in, `CURBIE_HTTP_HOST=0.0.0.0`).
-  - The Host/Origin guard.
-  - The shared page frame with a nav of CHAT and MANAGE.
-  - The Manage hub, and a Settings page for model, time zone, and units, stored in SQLite.
-  - A `clock` skill.
-- **Ollama 0.40.16** runs under Curbie's LaunchAgent with models on `CURBIE_BRAIN` (`installation.md` §1.3a). Installed: `qwen3:4b-instruct` (default), `qwen3:4b`, and `qwen3:8b`.
-- **The data dir gains a `settings` table** (migration 2) the first time Phase 2 starts against it. Migrations are forward-only, so after that the Phase 1 code refuses that database.
+- **Phase 2 is committed on `main`** (`c5a91f2`) and passed its manual check on the Mac (not from a phone). The real data dir now has the `settings` table. A pre-migration copy is at `/Volumes/CURBIE_BRAIN/curbie-phase1-backup-2026-11-23`.
+- **Phase 2 follow-ups are built, uncommitted, on branch `phase-2-followups`.** 270 tests in 33 suites pass, and the typecheck and build are clean. The dev log has Session 7.
+  - Model loading is a separate step with a 10-minute timeout, and saving a new model starts loading it in the background.
+  - The installed-models check times out after 3 s.
+  - Origin guard: canonical comparison, `http:` only, and a `Sec-Fetch-Site` check for unsafe requests with no Origin.
+  - A failed Settings save keeps the valid fields.
+  - Skills get the turn's settings through a `ToolExecutionContext`.
+  - IPv6 is bracketed in the startup log, and U+202F is written as an escape.
+- **The old `phase-2-lan-settings-frame` branch** (local and on origin) matches `main` and can be deleted.
 
 ## Starting a session
 
 1. Plug in the drive, then run `scripts/ollama-service.sh status`. If Ollama is stopped, run `scripts/ollama-service.sh start`.
 2. `cd server && npm test`.
-3. To run Curbie for the whole network: `CURBIE_HTTP_HOST=0.0.0.0 CURBIE_DATA_DIR=/Volumes/CURBIE_BRAIN/curbie npm start`. The log prints the LAN URL.
+3. To run Curbie: `CURBIE_DATA_DIR=/Volumes/CURBIE_BRAIN/curbie npm start` (add `CURBIE_HTTP_HOST=0.0.0.0` for the whole network).
 
 ## Plan
 
-### 1. Manual check of Phase 2 (not done yet; do this first)
+### 1. Quick manual check of the follow-ups, then commit
 
-Nothing in Phase 2 has been checked in a browser yet. The first run against the real data dir adds the `settings` table, after which `main` (Phase 1) refuses that database. To keep a way back, try it on a copy of `/Volumes/CURBIE_BRAIN/curbie` first.
-
-1. `scripts/ollama-service.sh start`, then `cd server && npm run build`.
-2. `CURBIE_HTTP_HOST=0.0.0.0 CURBIE_DATA_DIR=/Volumes/CURBIE_BRAIN/curbie npm start`. Note the "On your home network" URL in the log.
-3. On the Mac, open `http://127.0.0.1:3000`. The nav shows CHAT and MANAGE, and chat works as before.
-4. On the phone (same Wi-Fi), open the LAN URL. Allow `node` if macOS asks. Chat works there too.
-5. MANAGE → SETTINGS: all three models are listed. Switch units to metric and save. "Settings saved." appears.
-6. Ask "Convert 5 miles". It answers in km without being asked.
-7. Ask "What's today's date?". The answer is Sourced, cites Clock, and is in the chosen time zone.
-8. Switch the model to `qwen3:4b`, save, and ask "Hi". A slow first reply confirms the switch. Then switch back. Watch whether the old model stays in memory (`scripts/ollama-service.sh status`).
-9. Run `scripts/ollama-service.sh stop`, then reload Settings. The page loads with the "Couldn't reach Ollama" hint, and saving a time zone change still works.
-10. Look over the layout against `docs/mockups/`: the nav position, the Settings form, and the "Settings saved." alignment in the footer.
-
-Then:
-
-- Report anything that looks wrong, and fix it test first.
-- Review the branch diff and commit when satisfied.
-- Reserve the M1's IP in the router's DHCP settings (`installation.md` §1.5a).
-- Decide which of the final review's deferred notes to fix. Recommended first: the 180 s timeout on the installed-models check, since a hung Ollama hangs the Settings page.
-  - Shorten the installed-models check's timeout to 2–5 s.
-  - A failed save resets the other fields to their stored values.
-  - Origin compared by host only, not normalised (scheme, non-canonical IPv6, explicit `:80`).
-  - Add a `Sec-Fetch-Site` check for POSTs with no Origin header.
-  - Bracket IPv6 addresses in the startup log.
-  - Write the literal U+202F in `clock.adapter.ts` as ` `.
-  - The clock reads the time zone outside the turn's settings snapshot.
-  - Polish: unit tables typed from `UNITS`, page model interfaces, `display: contents` accessibility, more tests, and giving each skill adapter only the dependencies it needs.
+1. `cd server && npm run build && CURBIE_DATA_DIR=/Volumes/CURBIE_BRAIN/curbie npm start`.
+2. In Settings, switch to `qwen3:8b` and save. The page returns at once. `scripts/ollama-service.sh status` shows the 8B loading or loaded.
+3. Ask "Hi" straight away. It waits for the load, then answers (slowly, since it's a thinking model) instead of timing out after 180 s.
+4. Submit Settings with a valid model and units but a time zone that fails. Easiest way: stop Ollama and change the model, which gives the "Couldn't reach Ollama" model error. The units you picked stay selected.
+5. Switch back to `qwen3:4b-instruct`.
+6. Review the branch diff and commit when satisfied.
 
 ### 2. Phase 3 planning (documents and recipes)
 
@@ -61,12 +40,16 @@ Then:
 
 ### 3. Smaller items
 
-- **Drive speed.** Plug `CURBIE_BRAIN` straight into a USB-C port with a 10 Gb/s cable, then check `Link Speed` with `system_profiler SPUSBHostDataType`. Run `scripts/ollama-service.sh stop` first.
-- **Model memory when Curbie isn't in use (deferred).** Curbie pins the model in memory (`keep_alive: -1`), about 3.8 GB after one question, until `ollama stop <model>` or `scripts/ollama-service.sh stop`. Options for later: an `unload` command in the script, or a keep-alive setting.
+- **Drive speed (now urgent).** Loading `qwen3:8b` took about 170 s, about 35 MB/s, which is USB 2 speed. Plug `CURBIE_BRAIN` straight into a USB-C port with a 10 Gb/s cable, then check `Link Speed` with `system_profiler SPUSBHostDataType`. Run `scripts/ollama-service.sh stop` first. Then retry the 8B.
+- **Reserve the M1's IP** in the router's DHCP settings (`installation.md` §1.5a).
+- **Phone check of LAN access** (Phase 2 step 4, skipped).
+- **Model memory when Curbie isn't in use (deferred).** Curbie pins the model in memory (`keep_alive: -1`) until `ollama stop <model>` or `scripts/ollama-service.sh stop`. Switching models does unload the old one (seen 2026-11-23).
+- **A "loading model…" status in chat.** Deferred until the chat refinement work.
+- **Remaining review polish:** unit tables typed from `UNITS`, page model interfaces, `display: contents` accessibility, and more tests.
 - **Time Machine.** The backup drives haven't been connected since about 2026-08-01.
 
 ### 4. Housekeeping
 
-- Append a Session 7 entry to `docs/dev-log.md`.
+- Append a Session 8 entry to `docs/dev-log.md`.
 - Update the Status section in `CLAUDE.md`.
 - Rewrite this file.

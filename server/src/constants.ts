@@ -15,6 +15,8 @@ export const MAX_HISTORY_MESSAGE_LIMIT = 100;
 export const DEFAULT_MAX_TOOL_ROUNDS = 4;
 export const MAX_TOOL_ROUNDS_LIMIT = 10;
 export const WILDCARD_HTTP_HOSTS: ReadonlySet<string> = new Set(['0.0.0.0', '::']);
+export const SAFE_HTTP_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'OPTIONS']);
+export const TRUSTED_FETCH_SITES: ReadonlySet<string> = new Set(['same-origin', 'none']);
 
 export const MAX_CALCULATOR_EXPRESSION_LENGTH = 300;
 export const DISABLED_CALCULATOR_FUNCTIONS: readonly string[] = [
@@ -121,9 +123,12 @@ export const GENERATION_QUEUE = Symbol('GENERATION_QUEUE');
 export const SETTINGS_REPOSITORY = Symbol('SETTINGS_REPOSITORY');
 export const SETTINGS = Symbol('SETTINGS');
 export const MODEL_CATALOG = Symbol('MODEL_CATALOG');
+export const MODEL_LOADER = Symbol('MODEL_LOADER');
 export const SUPPORTED_TIME_ZONES = Symbol('SUPPORTED_TIME_ZONES');
 
 export const OLLAMA_DEFAULT_TIMEOUT_MILLISECONDS = 180_000;
+export const OLLAMA_CATALOG_TIMEOUT_MILLISECONDS = 3_000;
+export const OLLAMA_MODEL_LOAD_TIMEOUT_MILLISECONDS = 600_000;
 export const OLLAMA_CONTEXT_WINDOW_TOKENS = 8192;
 export const OLLAMA_MAX_OUTPUT_TOKENS = 512;
 

@@ -1,4 +1,4 @@
-import { OLLAMA_DEFAULT_TIMEOUT_MILLISECONDS } from '../../constants';
+import { OLLAMA_CATALOG_TIMEOUT_MILLISECONDS } from '../../constants';
 import { ModelUnavailableError } from '../../core/model/errors/model-unavailable.error';
 import type { ModelCatalogPort } from '../../core/model/interfaces/model-catalog-port.interface';
 import type { OllamaModelCatalogAdapterOptions } from './interfaces/ollama-model-catalog-adapter-options.interface';
@@ -12,7 +12,7 @@ export class OllamaModelCatalogAdapter implements ModelCatalogPort {
     try {
       response = await this.options.fetchFunction(`${this.options.baseUrl}/api/tags`, {
         method: 'GET',
-        signal: AbortSignal.timeout(this.options.timeoutMilliseconds ?? OLLAMA_DEFAULT_TIMEOUT_MILLISECONDS),
+        signal: AbortSignal.timeout(this.options.timeoutMilliseconds ?? OLLAMA_CATALOG_TIMEOUT_MILLISECONDS),
       });
     } catch (error) {
       throw new ModelUnavailableError(`Could not reach Ollama at ${this.options.baseUrl}: ${(error as Error).message}`);

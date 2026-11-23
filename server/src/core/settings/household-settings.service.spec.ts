@@ -25,14 +25,18 @@ describe('HouseholdSettingsService', () => {
     });
   }
 
-  async function captureFieldErrors(promise: Promise<unknown>): Promise<Record<string, string>> {
+  async function captureInvalidSettings(promise: Promise<unknown>): Promise<InvalidSettingsError> {
     try {
       await promise;
     } catch (error) {
-      if (error instanceof InvalidSettingsError) return { ...error.fieldErrors };
+      if (error instanceof InvalidSettingsError) return error;
       throw error;
     }
     throw new Error('Expected InvalidSettingsError.');
+  }
+
+  async function captureFieldErrors(promise: Promise<unknown>): Promise<Record<string, string>> {
+    return { ...(await captureInvalidSettings(promise)).fieldErrors };
   }
 
   beforeEach(() => {
@@ -89,6 +93,28 @@ describe('HouseholdSettingsService', () => {
       timeZone: SETTINGS_FIELD_ERRORS.timeZoneInvalid,
       units: SETTINGS_FIELD_ERRORS.unitsInvalid,
     });
+  });
+
+  it('update() rejects with the valid fields matched to server-side values, so the form can keep them', async () => {
+    const error = await captureInvalidSettings(
+      createService().update({ modelName: ' qwen3:8b ', timeZone: 'Mars/Olympus', units: 'metric' }),
+    );
+    expect(error.acceptedValues).toEqual({ modelName: 'qwen3:8b', units: 'metric' });
+  });
+
+  it('update() keeps the unchanged model as accepted even when the catalog is unreachable', async () => {
+    const service = createService(new FakeModelCatalog(new ModelUnavailableError('ECONNREFUSED')));
+    const error = await captureInvalidSettings(
+      service.update({ modelName: 'qwen3:4b-instruct', timeZone: 'America/Chicago', units: 'kelvin' }),
+    );
+    expect(error.acceptedValues).toEqual({ modelName: 'qwen3:4b-instruct', timeZone: 'America/Chicago' });
+  });
+
+  it('update() accepts nothing it could not match', async () => {
+    const error = await captureInvalidSettings(
+      createService().update({ modelName: 'qwen3:99b', timeZone: 'Mars/Olympus', units: 'kelvin' }),
+    );
+    expect(error.acceptedValues).toEqual({});
   });
 
   it('update() rejects non-string values', async () => {

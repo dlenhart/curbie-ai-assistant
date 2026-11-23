@@ -1,3 +1,4 @@
+import { OLLAMA_CATALOG_TIMEOUT_MILLISECONDS } from '../../constants';
 import { ModelUnavailableError } from '../../core/model/errors/model-unavailable.error';
 import { OllamaModelCatalogAdapter } from './ollama-model-catalog.adapter';
 import type { GetFunction } from './types/get-function.type';
@@ -27,6 +28,20 @@ describe('OllamaModelCatalogAdapter', () => {
     });
     await expect(adapter.listInstalledModelNames()).rejects.toThrow(ModelUnavailableError);
     await expect(adapter.listInstalledModelNames()).rejects.toThrow(/ECONNREFUSED/);
+  });
+
+  it('gives up on a hung Ollama after its timeout', async () => {
+    const adapter = new OllamaModelCatalogAdapter({
+      baseUrl: 'http://127.0.0.1:11434',
+      timeoutMilliseconds: 20,
+      fetchFunction: (_url, init) =>
+        new Promise((_resolve, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason))),
+    });
+    await expect(adapter.listInstalledModelNames()).rejects.toThrow(ModelUnavailableError);
+  });
+
+  it('defaults to a short timeout so a hung Ollama cannot hang the Settings page', () => {
+    expect(OLLAMA_CATALOG_TIMEOUT_MILLISECONDS).toBeLessThanOrEqual(5_000);
   });
 
   it('reports a non-OK status as ModelUnavailableError', async () => {

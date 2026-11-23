@@ -7,13 +7,14 @@ import type { AssistantReply } from '../../core/conversation/interfaces/assistan
 import { ModelUnavailableError } from '../../core/model/errors/model-unavailable.error';
 import type { SerialTaskQueue } from '../../core/shared/serial-task.queue';
 import type { ChatErrorPayload } from './interfaces/chat-error-payload.interface';
+import { readOriginCheckInput } from './origin-check-input.reader';
 import { evaluateRequestOrigin } from './request-origin.policy';
 import { parseUserMessagePayload } from './user-message-payload.parser';
 
 @WebSocketGateway({
   path: '/ws',
-  verifyClient: (info: { origin: string; req: IncomingMessage }, settle: (isAccepted: boolean, code?: number) => void) =>
-    settle(evaluateRequestOrigin({ host: info.req.headers.host, origin: info.origin || undefined }).isAllowed, 403),
+  verifyClient: (info: { req: IncomingMessage }, settle: (isAccepted: boolean, code?: number) => void) =>
+    settle(evaluateRequestOrigin(readOriginCheckInput(info.req)).isAllowed, 403),
 })
 export class ChatGateway {
   private readonly logger = new Logger(ChatGateway.name);

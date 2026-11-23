@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { WsAdapter } from '@nestjs/platform-ws';
+import { readOriginCheckInput } from './origin-check-input.reader';
 import { evaluateRequestOrigin } from './request-origin.policy';
 
 export function configureApp(app: NestExpressApplication): void {
@@ -14,7 +15,7 @@ export function configureApp(app: NestExpressApplication): void {
 }
 
 function refuseForeignRequests(request: IncomingMessage, response: ServerResponse, next: () => void): void {
-  const verdict = evaluateRequestOrigin({ host: request.headers.host, origin: request.headers.origin });
+  const verdict = evaluateRequestOrigin(readOriginCheckInput(request));
   if (verdict.isAllowed) {
     next();
     return;

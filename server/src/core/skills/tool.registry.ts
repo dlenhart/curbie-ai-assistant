@@ -6,6 +6,7 @@ import { SkillRegistrationError } from './errors/skill-registration.error';
 import type { RegisteredTool } from './interfaces/registered-tool.interface';
 import type { SkillAdapter } from './interfaces/skill-adapter.interface';
 import type { SkillDefinition } from './interfaces/skill-definition.interface';
+import type { ToolExecutionContext } from './interfaces/tool-execution-context.interface';
 import type { ToolExecutionOutcome } from './types/tool-execution-outcome.type';
 
 export class ToolRegistry {
@@ -46,7 +47,7 @@ export class ToolRegistry {
     return [...this.toolsByName.values()].map((tool) => tool.definition);
   }
 
-  async execute(call: ToolCallRequest): Promise<ToolExecutionOutcome> {
+  async execute(call: ToolCallRequest, context: ToolExecutionContext): Promise<ToolExecutionOutcome> {
     const tool = this.toolsByName.get(call.name);
     if (tool === undefined) {
       return { kind: 'rejected', reason: `Unknown tool "${call.name}". Only registered tools can be called.` };
@@ -58,7 +59,7 @@ export class ToolRegistry {
       };
     }
     try {
-      const result = await tool.adapter.execute(call.name, call.arguments);
+      const result = await tool.adapter.execute(call.name, call.arguments, context);
       return {
         kind: 'success',
         source: {

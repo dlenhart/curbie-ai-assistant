@@ -5,6 +5,8 @@ const distDirectory = path.join(repositoryRoot, 'server', 'dist');
 const skillsDirectory = path.join(repositoryRoot, 'skills');
 
 const { OllamaModelAdapter } = require(path.join(distDirectory, 'adapters/model/ollama-model.adapter'));
+const { OllamaModelLoader } = require(path.join(distDirectory, 'adapters/model/ollama-model.loader'));
+const { ModelLoadingDecorator } = require(path.join(distDirectory, 'core/model/model-loading.decorator'));
 const { ConversationOrchestrator } = require(path.join(distDirectory, 'core/conversation/conversation.orchestrator'));
 const { buildSystemPrompt } = require(path.join(distDirectory, 'core/conversation/system-prompt.builder'));
 const { buildToolRegistry } = require(path.join(distDirectory, 'core/skills/tool-registry.factory'));
@@ -93,14 +95,21 @@ function createOrchestrator(modelName, fetchFunction) {
   let idCounter = 0;
   const idGenerator = { next: (prefix) => `${prefix}_${++idCounter}` };
   const settings = createSettingsReader(modelName);
-  const skillAdapters = createSkillAdapters({ clock: { now: () => new Date() }, settings });
+  const skillAdapters = createSkillAdapters({ clock: { now: () => new Date() } });
   const toolRegistry = buildToolRegistry(loadSkillDocuments(skillsDirectory), skillAdapters, idGenerator);
   return new ConversationOrchestrator({
-    model: new OllamaModelAdapter({
-      baseUrl: OLLAMA_BASE_URL,
-      fetchFunction,
-      timeoutMilliseconds: REQUEST_TIMEOUT_MILLISECONDS,
-    }),
+    model: new ModelLoadingDecorator(
+      new OllamaModelLoader({
+        baseUrl: OLLAMA_BASE_URL,
+        getFunction: (url, init) => fetch(url, init),
+        postFunction: (url, init) => fetch(url, init),
+      }),
+      new OllamaModelAdapter({
+        baseUrl: OLLAMA_BASE_URL,
+        fetchFunction,
+        timeoutMilliseconds: REQUEST_TIMEOUT_MILLISECONDS,
+      }),
+    ),
     toolRegistry,
     transcripts: { ensureConversation() {}, recentMessages: () => [], appendMessage() {} },
     clock: { now: () => new Date() },

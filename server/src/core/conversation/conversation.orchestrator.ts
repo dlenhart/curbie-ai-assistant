@@ -65,7 +65,7 @@ export class ConversationOrchestrator {
 
       messages.push({ role: 'assistant', content: response.content, toolCalls: response.toolCalls });
       for (const call of response.toolCalls) {
-        const outcome = await toolRegistry.execute(call);
+        const outcome = await toolRegistry.execute(call, { settings });
         if (outcome.kind === 'success') sourcesById.set(outcome.source.id, outcome.source);
         messages.push({ role: 'tool', toolName: call.name, content: formatToolOutcome(outcome) });
       }

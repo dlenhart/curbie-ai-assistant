@@ -2,8 +2,13 @@ import { SequentialIdGenerator } from '../testing/sequential-id.generator';
 import { SkillRegistrationError } from './errors/skill-registration.error';
 import type { SkillAdapter } from './interfaces/skill-adapter.interface';
 import type { SkillDefinition } from './interfaces/skill-definition.interface';
+import type { ToolExecutionContext } from './interfaces/tool-execution-context.interface';
 import type { ToolResult } from './interfaces/tool-result.interface';
 import { ToolRegistry } from './tool.registry';
+
+const CONTEXT: ToolExecutionContext = {
+  settings: { modelName: 'qwen3:4b-instruct', timeZone: 'America/Chicago', units: 'metric' },
+};
 
 function echoSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
   return {
@@ -30,10 +35,15 @@ function echoSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
 
 class EchoAdapter implements SkillAdapter {
   readonly name = 'echo';
-  readonly calls: Array<{ toolName: string; toolArguments: Record<string, unknown> }> = [];
+  readonly calls: Array<{ toolName: string; toolArguments: Record<string, unknown>; context: ToolExecutionContext }> =
+    [];
 
-  async execute(toolName: string, toolArguments: Record<string, unknown>): Promise<ToolResult> {
-    this.calls.push({ toolName, toolArguments });
+  async execute(
+    toolName: string,
+    toolArguments: Record<string, unknown>,
+    context: ToolExecutionContext,
+  ): Promise<ToolResult> {
+    this.calls.push({ toolName, toolArguments, context });
     return { title: 'Echo', content: `echo: ${String(toolArguments.text)}`, requiresQuote: false };
   }
 }
@@ -53,18 +63,18 @@ describe('ToolRegistry', () => {
     expect(registry.registeredSkills().map((skill) => skill.name)).toEqual(['echo']);
   });
 
-  it('executes a valid call and wraps the result as a source with a fresh ID', async () => {
+  it('executes a valid call with the turn context and wraps the result as a source with a fresh ID', async () => {
     const registry = new ToolRegistry(new SequentialIdGenerator());
     const adapter = new EchoAdapter();
     registry.register(echoSkill(), adapter);
 
-    const outcome = await registry.execute({ name: 'echo_text', arguments: { text: 'hi' } });
+    const outcome = await registry.execute({ name: 'echo_text', arguments: { text: 'hi' } }, CONTEXT);
 
     expect(outcome).toEqual({
       kind: 'success',
       source: { id: 'src_1', skillName: 'echo', title: 'Echo', content: 'echo: hi', requiresQuote: false },
     });
-    expect(adapter.calls).toEqual([{ toolName: 'echo_text', toolArguments: { text: 'hi' } }]);
+    expect(adapter.calls).toEqual([{ toolName: 'echo_text', toolArguments: { text: 'hi' }, context: CONTEXT }]);
   });
 
   it('rejects unknown tools without calling any adapter', async () => {
@@ -72,7 +82,7 @@ describe('ToolRegistry', () => {
     const adapter = new EchoAdapter();
     registry.register(echoSkill(), adapter);
 
-    const outcome = await registry.execute({ name: 'run_shell_command', arguments: { command: 'rm -rf ~' } });
+    const outcome = await registry.execute({ name: 'run_shell_command', arguments: { command: 'rm -rf ~' } }, CONTEXT);
 
     expect(outcome.kind).toBe('rejected');
     expect(outcome.kind === 'rejected' && outcome.reason).toMatch(/Unknown tool "run_shell_command"/);
@@ -84,8 +94,8 @@ describe('ToolRegistry', () => {
     const adapter = new EchoAdapter();
     registry.register(echoSkill(), adapter);
 
-    const missing = await registry.execute({ name: 'echo_text', arguments: {} });
-    const extra = await registry.execute({ name: 'echo_text', arguments: { text: 'hi', sneaky: true } });
+    const missing = await registry.execute({ name: 'echo_text', arguments: {} }, CONTEXT);
+    const extra = await registry.execute({ name: 'echo_text', arguments: { text: 'hi', sneaky: true } }, CONTEXT);
 
     expect(missing.kind).toBe('rejected');
     expect(extra.kind).toBe('rejected');
@@ -96,7 +106,7 @@ describe('ToolRegistry', () => {
     const registry = new ToolRegistry(new SequentialIdGenerator());
     registry.register(echoSkill(), new FailingAdapter());
 
-    const outcome = await registry.execute({ name: 'echo_text', arguments: { text: 'hi' } });
+    const outcome = await registry.execute({ name: 'echo_text', arguments: { text: 'hi' } }, CONTEXT);
 
     expect(outcome).toEqual({ kind: 'failed', reason: 'echo_text failed: upstream service timed out' });
   });

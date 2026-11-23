@@ -8,7 +8,9 @@ Phase 1 (walking skeleton) is done: all 12 plan tasks, 152 tests in 20 suites, c
 
 **The M1 is set up.** Ollama runs under Curbie's own LaunchAgent, with its models on the `CURBIE_BRAIN` USB drive (`installation.md` §1.3a). Use `scripts/ollama-service.sh start|stop|status`, and stop Ollama before ejecting the drive. The data dir is `/Volumes/CURBIE_BRAIN/curbie`.
 
-**Phase 2 is built (2026-11-15), uncommitted on branch `phase-2-lan-settings-frame`. The manual check has NOT been done yet: start with the 10 steps in `docs/next-session.md` §1.** Plan: `docs/superpowers/plans/2026-11-15-curbie-phase-2-lan-settings-frame.md`. 229 tests in 29 suites. Plain HTTP by IP (TLS deferred), opt-in LAN binding (`CURBIE_HTTP_HOST=0.0.0.0`), a Host/Origin guard, the shared page frame and nav, the Manage hub, a Settings page (model, time zone, units in SQLite), and a `clock` skill (design §4.13, §4.17, §5.3).
+**Phase 2 is committed on `main` and passed its manual check (2026-11-23).** Plan: `docs/superpowers/plans/2026-11-15-curbie-phase-2-lan-settings-frame.md`. Plain HTTP by IP (TLS deferred), opt-in LAN binding (`CURBIE_HTTP_HOST=0.0.0.0`), a Host/Origin guard, the shared page frame and nav, the Manage hub, a Settings page (model, time zone, units in SQLite), and a `clock` skill (design §4.13, §4.17, §5.3).
+
+**Phase 2 follow-ups are built, uncommitted, on branch `phase-2-followups` (2026-11-23).** 270 tests in 33 suites. Model loading is now a separate step with its own timeout, and a model saved in Settings starts loading in the background. Also: a 3 s installed-models check, a hardened Origin guard, failed saves that keep valid fields, and the turn's settings passed to skills (design §4.5, §4.13, §4.17, §5.3, §5.7).
 
 **Next session:** follow `docs/next-session.md`. The `hbs` advisory is accepted on one condition: render locals come only from server-side values, never from request data (design §5.7).
 

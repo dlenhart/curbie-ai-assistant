@@ -5,6 +5,7 @@ import type { EditableSettings } from './interfaces/editable-settings.interface'
 import type { HouseholdSettingsReader } from './interfaces/household-settings-reader.interface';
 import type { HouseholdSettingsServiceDependencies } from './interfaces/household-settings-service-dependencies.interface';
 import type { HouseholdSettings } from './interfaces/household-settings.interface';
+import type { ModelCheck } from './types/model-check.type';
 import type { SettingsFieldErrors } from './types/settings-field-errors.type';
 import type { Units } from './types/units.type';
 
@@ -15,6 +16,7 @@ export class HouseholdSettingsService implements HouseholdSettingsReader {
       const fields = Object.keys(defaultErrors).join(', ');
       throw new InvalidSettingsError(
         defaultErrors,
+        {},
         `The default household settings are invalid (${fields}). Check the host time zone (TZ) and CURBIE_MODEL.`,
       );
     }
@@ -44,26 +46,26 @@ export class HouseholdSettingsService implements HouseholdSettingsReader {
   }
 
   async update(submission: Readonly<Record<string, unknown>>): Promise<HouseholdSettings> {
-    const fieldErrors: { -readonly [Field in keyof SettingsFieldErrors]: string } = {};
-    const { modelName, timeZone, units } = submission;
+    const modelCheck = await this.checkModel(submission.modelName);
+    const matchedTimeZone = this.matchTimeZone(submission.timeZone);
+    const matchedUnits = UNITS.find((candidate) => candidate === submission.units);
 
-    if (typeof modelName !== 'string' || modelName.trim() === '') {
-      fieldErrors.modelName = SETTINGS_FIELD_ERRORS.modelRequired;
-    } else {
-      const modelError = await this.checkModel(modelName.trim());
-      if (modelError !== undefined) fieldErrors.modelName = modelError;
+    if (!modelCheck.isAccepted || matchedTimeZone === undefined || matchedUnits === undefined) {
+      throw new InvalidSettingsError(
+        {
+          ...(modelCheck.isAccepted ? {} : { modelName: modelCheck.error }),
+          ...(matchedTimeZone === undefined ? { timeZone: SETTINGS_FIELD_ERRORS.timeZoneInvalid } : {}),
+          ...(matchedUnits === undefined ? { units: SETTINGS_FIELD_ERRORS.unitsInvalid } : {}),
+        },
+        {
+          ...(modelCheck.isAccepted ? { modelName: modelCheck.modelName } : {}),
+          ...(matchedTimeZone === undefined ? {} : { timeZone: matchedTimeZone }),
+          ...(matchedUnits === undefined ? {} : { units: matchedUnits }),
+        },
+      );
     }
-    if (typeof timeZone !== 'string' || !this.isSupportedTimeZone(timeZone)) {
-      fieldErrors.timeZone = SETTINGS_FIELD_ERRORS.timeZoneInvalid;
-    }
-    if (!isUnits(units)) fieldErrors.units = SETTINGS_FIELD_ERRORS.unitsInvalid;
-    if (Object.keys(fieldErrors).length > 0) throw new InvalidSettingsError(fieldErrors);
 
-    const settings: HouseholdSettings = {
-      modelName: (modelName as string).trim(),
-      timeZone: timeZone as string,
-      units: units as Units,
-    };
+    const settings: HouseholdSettings = { modelName: modelCheck.modelName, timeZone: matchedTimeZone, units: matchedUnits };
     this.dependencies.repository.saveAll({ ...settings }, this.dependencies.clock.now().toISOString());
     return settings;
   }
@@ -72,15 +74,30 @@ export class HouseholdSettingsService implements HouseholdSettingsReader {
     return [...this.dependencies.supportedTimeZones].sort();
   }
 
-  private async checkModel(modelName: string): Promise<string | undefined> {
-    if (modelName === this.readForEditing().settings.modelName) return undefined;
+  private async checkModel(submitted: unknown): Promise<ModelCheck> {
+    if (typeof submitted !== 'string' || submitted.trim() === '') {
+      return { isAccepted: false, error: SETTINGS_FIELD_ERRORS.modelRequired };
+    }
+    const modelName = submitted.trim();
+    const currentModelName = this.readForEditing().settings.modelName;
+    if (modelName === currentModelName) return { isAccepted: true, modelName: currentModelName };
+
+    let installedModelNames: readonly string[];
     try {
-      const installed = await this.dependencies.modelCatalog.listInstalledModelNames();
-      return installed.includes(modelName) ? undefined : SETTINGS_FIELD_ERRORS.modelNotInstalled;
+      installedModelNames = await this.dependencies.modelCatalog.listInstalledModelNames();
     } catch (error) {
-      if (error instanceof ModelUnavailableError) return SETTINGS_FIELD_ERRORS.modelCatalogUnavailable;
+      if (error instanceof ModelUnavailableError) {
+        return { isAccepted: false, error: SETTINGS_FIELD_ERRORS.modelCatalogUnavailable };
+      }
       throw error;
     }
+    const installedName = installedModelNames.find((name) => name === modelName);
+    if (installedName === undefined) return { isAccepted: false, error: SETTINGS_FIELD_ERRORS.modelNotInstalled };
+    return { isAccepted: true, modelName: installedName };
+  }
+
+  private matchTimeZone(submitted: unknown): string | undefined {
+    return [...this.dependencies.supportedTimeZones].find((timeZone) => timeZone === submitted);
   }
 
   private validate(candidate: { modelName: string; timeZone: string; units: string }): SettingsFieldErrors {

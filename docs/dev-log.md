@@ -443,3 +443,40 @@ The last exchange was "What will the UI look like?" Claude showed the planned st
 - **"No auth" isn't "no security."** Deciding against sign-in still left a browser-shaped hole. The guard is a few lines, and it's about where requests come *from*, not *who* sends them.
 - **Keep facts in tools, even the boring ones.** Today's date is the most trivial fact there is, and it still went through a cited tool, because the rule only works if it has no exceptions.
 - **A settings page changes the shape of the code.** Making one value user-editable moved the model name from wiring onto every request, and that turned out to be the right shape anyway.
+
+## Session 7 — 2026-11-23: Phase 2's live check, and the follow-ups it shaped
+
+**Goal:** run Phase 2's manual check against the real data dir, then fix the deferred review notes before Phase 3.
+
+### How it unfolded
+
+1. **The state didn't match the notes.** The resume file said Phase 2 was uncommitted on its branch, but the owner had already committed it to `main`. The real data dir still had no `settings` table, so Phase 2 had never actually run. Before the first start applied migration 2 (forward only), Claude copied the data dir to a dated backup.
+2. **Checked from the Mac only.** The owner skipped the phone step. The model list, the switch, the date answer (Sourced, citing Clock), the "Couldn't reach Ollama" hint, saving while Ollama was down, and the layout against the mockups all passed.
+3. **The 8B timed out, and the log showed why.** Switching to `qwen3:8b` and asking a question hit the 180 s timeout. That looked like a thinking model being slow. Ollama's log told a different story: the request started at 09:20:16 and the model finished loading at 09:23:08. About 170 s of the budget went to reading 5.7 GB off the drive, roughly 35 MB/s, which is USB 2 speed. The model got 8 seconds to think. The cancel did reach Ollama, so nothing kept running on the GPU after Curbie gave up.
+4. **That turned a deferred idea into a fix.** Claude laid out three options: warm the model when Settings saves it (only helps that one path), load it as its own step before every call (covers every cold start), or both. The owner took both, plus every remaining review note: the models-list timeout, Origin hardening, and the polish batch.
+5. **The `hbs` rule shaped the failed-save fix.** A failed save reset every field, because echoing request data into a template is exactly what the `hbs` advisory forbids. The fix keeps the rule: each valid field is shown as the server-side value it matched (the installed-model entry, the supported zone, the `UNITS` member), never the submitted text. The design now says that matching against a server list counts as server-side.
+6. **Built test first, in one pass.** Writing the tests turned up an edge case the plan had missed. If the stored time zone is invalid and a failed save fixes it, the page still showed the stored-value error, so that page now uses only the save's own errors. TypeScript's header types showed that Node already joins repeated headers into one string, so the planned array handling was dropped as dead code.
+
+### Decided
+- **Loading is a separate step** (design §4.5). A `ModelLoadingDecorator` (Decorator pattern) wraps the model port. Before each call, the `OllamaModelLoader` checks `/api/ps` (3 s timeout) and, if needed, loads with an empty `/api/generate` (10-minute timeout, same `num_ctx` as chat, so Ollama doesn't load it twice). Concurrent loads share one request. A failed load is retried next time.
+- **Saving a model starts loading it in the background.** A failure is only logged, because the next chat reports it loudly.
+- **The installed-models check gets 3 s, not 180 s.**
+- **Origin guard** (design §5.3): canonical URL comparison, `http:` only. An unsafe method with no `Origin` is refused unless `Sec-Fetch-Site` is absent, `same-origin`, or `none`. `same-site` is refused, since on an IP host it means another port.
+- **Skills get the turn's settings** through a `ToolExecutionContext`. The clock adapter now depends only on `Clock`.
+- **Failed saves keep valid fields as server-matched values** (design §4.17, §5.7).
+
+### Produced
+- `server/`: `core/model/model-loading.decorator.ts`, `ModelLoaderPort`, `adapters/model/ollama-model.loader.ts`, `RecordingModelLoader`; `origin-check-input.reader.ts` shared by the middleware and the WebSocket guard; `http-url.formatter.ts`; `ToolExecutionContext`; `ModelCheck`; `InvalidSettingsError.acceptedValues`. 270 tests in 33 suites.
+- `diagnostics/model-contract.diagnostic.js`: wraps the adapter with the loader so load time is no longer counted as reply time.
+- Docs: design §4.5, §4.13, §4.17, §5.3, §5.7; `next-session.md`; `CLAUDE.md` Status.
+
+### Still open
+- The owner's review and commit of `phase-2-followups`.
+- The drive link (now urgent), then a retry of the 8B.
+- Phase 3 planning. Carried over: DHCP reservation, the phone check, model memory when idle, Time Machine.
+
+### Takeaways for the blog
+- **A timeout measures everything inside it.** "The 8B is too slow" was the obvious reading. The log showed the model had 8 seconds to think, because loading had used up the rest.
+- **Split the phases you want to measure separately.** Once loading had its own step and timeout, a slow drive and a slow model became two different problems with two different fixes.
+- **A security rule can shape a feature without blocking it.** "Never echo request data into a template" sounded like it ruled out keeping form input. Matching input against server-side lists kept both the rule and the usability.
+- **Back up before a one-way door.** A forward-only migration on the only copy of the data takes one `cp -R` to make safe.

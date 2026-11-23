@@ -2,6 +2,7 @@ import { DONT_KNOW_FALLBACK_TEXT } from '../../constants';
 import { ModelUnavailableError } from '../model/errors/model-unavailable.error';
 import type { SkillAdapter } from '../skills/interfaces/skill-adapter.interface';
 import type { SkillDefinition } from '../skills/interfaces/skill-definition.interface';
+import type { ToolExecutionContext } from '../skills/interfaces/tool-execution-context.interface';
 import type { ToolResult } from '../skills/interfaces/tool-result.interface';
 import { ToolRegistry } from '../skills/tool.registry';
 import { FixedClock } from '../testing/fixed.clock';
@@ -39,7 +40,10 @@ const adderSkill: SkillDefinition = {
 
 class AdderAdapter implements SkillAdapter {
   readonly name = 'adder';
-  async execute(_toolName: string, toolArguments: Record<string, unknown>): Promise<ToolResult> {
+  readonly receivedContexts: ToolExecutionContext[] = [];
+
+  async execute(_toolName: string, toolArguments: Record<string, unknown>, context: ToolExecutionContext): Promise<ToolResult> {
+    this.receivedContexts.push(context);
     const sum = Number(toolArguments.a) + Number(toolArguments.b);
     return { title: 'Adder', content: `${toolArguments.a} + ${toolArguments.b} = ${sum}`, requiresQuote: false };
   }
@@ -51,7 +55,8 @@ function createOrchestrator(
 ) {
   const idGenerator = new SequentialIdGenerator();
   const toolRegistry = new ToolRegistry(idGenerator);
-  toolRegistry.register(adderSkill, new AdderAdapter());
+  const adderAdapter = new AdderAdapter();
+  toolRegistry.register(adderSkill, adderAdapter);
   const transcripts = new InMemoryTranscriptRepository();
   const orchestrator = new ConversationOrchestrator({
     model,
@@ -64,7 +69,7 @@ function createOrchestrator(
     historyMessageLimit: overrides.historyMessageLimit ?? 10,
     maxToolRounds: overrides.maxToolRounds ?? 4,
   });
-  return { orchestrator, transcripts };
+  return { orchestrator, transcripts, adderAdapter };
 }
 
 const input = { userId: 'owner', conversationId: 'conv_1', text: 'What is 2 + 3?' };
@@ -276,6 +281,17 @@ describe('ConversationOrchestrator', () => {
     ]);
     await createOrchestrator(model, { settings }).orchestrator.handleUserMessage(input);
     expect(settings.readCount).toBe(1);
+  });
+
+  it("gives tools the turn's settings snapshot", async () => {
+    const model = new ScriptedModel([
+      toolCallResponse('add_numbers', { a: 2, b: 3 }),
+      textResponse(''),
+      answerResponse({ category: 'cited', text: '2 + 3 is 5.', sourceIds: ['src_1'], quotes: [] }),
+    ]);
+    const { orchestrator, adderAdapter } = createOrchestrator(model);
+    await orchestrator.handleUserMessage(input);
+    expect(adderAdapter.receivedContexts).toEqual([{ settings: SETTINGS }]);
   });
 
   it('uses new settings on the next turn', async () => {

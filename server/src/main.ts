@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { configureApp } from './adapters/web/app.configurator';
+import { formatHttpUrl } from './adapters/web/http-url.formatter';
 import { AppModule } from './app.module';
 import { listLanAddresses } from './adapters/system/lan-address.finder';
 import { CONFIG, SETTINGS, WILDCARD_HTTP_HOSTS } from './constants';
@@ -15,10 +16,11 @@ async function bootstrap(): Promise<void> {
   configureApp(app);
   const config = app.get<CurbieConfig>(CONFIG);
   await app.listen(config.httpPort, config.httpHost);
-  Logger.log(`Curbie is listening on http://${config.httpHost}:${config.httpPort} (model: ${app.get<HouseholdSettingsService>(SETTINGS).current().modelName})`, 'Bootstrap');
+  const modelName = app.get<HouseholdSettingsService>(SETTINGS).current().modelName;
+  Logger.log(`Curbie is listening on ${formatHttpUrl(config.httpHost, config.httpPort)} (model: ${modelName})`, 'Bootstrap');
   if (!WILDCARD_HTTP_HOSTS.has(config.httpHost)) return;
   for (const address of listLanAddresses()) {
-    Logger.log(`On your home network: http://${address}:${config.httpPort}`, 'Bootstrap');
+    Logger.log(`On your home network: ${formatHttpUrl(address, config.httpPort)}`, 'Bootstrap');
   }
 }
 
